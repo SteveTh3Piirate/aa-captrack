@@ -7,7 +7,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        "allianceauth-corptools>=4.0.0",
+        "allianceauth-corptools==2.15.2,
     ],
     classifiers=[
         "Framework :: Django",
