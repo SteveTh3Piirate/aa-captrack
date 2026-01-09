@@ -1,0 +1,59 @@
+{% extends "allianceauth/base.html" %}
+
+{% block content %}
+<h1>CapTrack Dashboard</h1>
+
+<h2>Tracked Capitals</h2>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Character</th>
+            <th>Ship</th>
+            <th>System</th>
+            <th>Distance from Home</th>
+            <th>Last Seen</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for cap in capitals %}
+        <tr>
+            <td>{{ cap.character_name }}</td>
+            <td>{{ cap.ship_type_name }}</td>
+            <td>{{ cap.system_name }}</td>
+            <td>{{ cap.distance_from_home }}</td>
+            <td>{{ cap.last_seen }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5">No capitals tracked yet.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<h2>Recent Alerts</h2>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Character</th>
+            <th>Ship</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Distance from Home</th>
+            <th>When</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for alert in alerts %}
+        <tr>
+            <td>{{ alert.character_name }}</td>
+            <td>{{ alert.ship_type_name }}</td>
+            <td>{{ alert.old_system }}</td>
+            <td>{{ alert.new_system }}</td>
+            <td>{{ alert.distance_from_home }}</td>
+            <td>{{ alert.created_at }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6">No alerts yet.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
