@@ -3,11 +3,7 @@ from eveuniverse.models import EveRegion
 
 
 class CapTrackSettings(models.Model):
-    """
-    Stores the blacklist of region names.
-    CapTrack uses this to filter corp member capitals
-    based on their last known location from Corptools.
-    """
+    id = models.BigAutoField(primary_key=True)
 
     blacklisted_regions = models.ManyToManyField(
         EveRegion,
