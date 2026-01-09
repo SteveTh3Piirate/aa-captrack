@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('mock_eveuniverse', '__first__'),
+        ('eveuniverse', '__first__'),
     ]
 
     operations = [
@@ -16,7 +16,11 @@ class Migration(migrations.Migration):
             name='CapTrackSettings',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('blacklisted_regions', models.ManyToManyField(blank=True, help_text='Select regions to blacklist for capital tracking.', to='mock_eveuniverse.everegion')),
+                ('blacklisted_regions', models.ManyToManyField(
+                    blank=True,
+                    help_text='Select regions to blacklist for capital tracking.',
+                    to='eveuniverse.everegion'
+                )),
             ],
             options={
                 'verbose_name': 'CapTrack settings',
