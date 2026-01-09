@@ -1,17 +1,27 @@
 from django.contrib.auth.decorators import login_required, permission_required
 from django.shortcuts import render
 
-from .models import TrackedCapital, MovementAlert
+from .models import CapTrackSettings
+from .services import get_capitals_in_blacklisted_regions
 
 
 @login_required
-@permission_required("captrack.view_trackedcapital", raise_exception=True)
+@permission_required("captrack.view_captracksettings", raise_exception=True)
 def dashboard(request):
-    capitals = TrackedCapital.objects.order_by("-last_seen")
-    alerts = MovementAlert.objects.order_by("-created_at")[:50]
+    # Load the single settings row
+    settings_obj = CapTrackSettings.objects.first()
+
+    if settings_obj:
+        blacklisted_regions = list(settings_obj.blacklisted_regions.all())
+    else:
+        blacklisted_regions = []
+
+    # Real Corptools-powered capital discovery
+    regions_with_capitals = get_capitals_in_blacklisted_regions(blacklisted_regions)
 
     context = {
-        "capitals": capitals,
-        "alerts": alerts,
+        "blacklisted_regions": blacklisted_regions,
+        "regions_with_capitals": regions_with_capitals,
     }
+
     return render(request, "captrack/dashboard.html", context)

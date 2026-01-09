@@ -1,44 +1,23 @@
 ﻿from django.db import models
+from eveuniverse.models import EveRegion
 
 
-class HomeConfig(models.Model):
-    """Config for home system and allowed radius."""
-    home_system_id = models.IntegerField()
-    home_system_name = models.CharField(max_length=255)
-    allowed_jumps = models.IntegerField(default=3)
+class CapTrackSettings(models.Model):
+    """
+    Stores the blacklist of region names.
+    CapTrack uses this to filter corp member capitals
+    based on their last known location from Corptools.
+    """
 
-    def __str__(self):
-        return f"{self.home_system_name} ({self.allowed_jumps} jumps)"
+    blacklisted_regions = models.ManyToManyField(
+        EveRegion,
+        blank=True,
+        help_text="Select regions to blacklist for capital tracking."
+    )
 
-
-class TrackedCapital(models.Model):
-    """Current known state of a capital ship for a character."""
-    character_id = models.BigIntegerField()
-    character_name = models.CharField(max_length=255)
-
-    ship_type_id = models.IntegerField()
-    ship_type_name = models.CharField(max_length=255)
-
-    system_id = models.IntegerField(null=True, blank=True)
-    system_name = models.CharField(max_length=255, null=True, blank=True)
-
-    distance_from_home = models.IntegerField(null=True, blank=True)
-    last_seen = models.DateTimeField(auto_now=True)
+    class Meta:
+        verbose_name = "CapTrack settings"
+        verbose_name_plural = "CapTrack settings"
 
     def __str__(self):
-        return f"{self.character_name} - {self.ship_type_name} @ {self.system_name}"
-
-
-class MovementAlert(models.Model):
-    """History of movement events that triggered alerts."""
-    character_name = models.CharField(max_length=255)
-    ship_type_name = models.CharField(max_length=255)
-
-    old_system = models.CharField(max_length=255)
-    new_system = models.CharField(max_length=255)
-
-    distance_from_home = models.IntegerField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.character_name} moved {self.ship_type_name} {self.old_system} → {self.new_system}"
+        return "CapTrack Settings"

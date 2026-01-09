@@ -1,33 +1,12 @@
 from django.contrib import admin
-from .models import HomeConfig, TrackedCapital, MovementAlert
+from .models import CapTrackSettings
 
 
-@admin.register(HomeConfig)
-class HomeConfigAdmin(admin.ModelAdmin):
-    list_display = ("home_system_name", "allowed_jumps")
+@admin.register(CapTrackSettings)
+class CapTrackSettingsAdmin(admin.ModelAdmin):
+    autocomplete_fields = ("blacklisted_regions",)
+    fields = ("blacklisted_regions",)
 
-
-@admin.register(TrackedCapital)
-class TrackedCapitalAdmin(admin.ModelAdmin):
-    list_display = (
-        "character_name",
-        "ship_type_name",
-        "system_name",
-        "distance_from_home",
-        "last_seen",
-    )
-    search_fields = ("character_name", "ship_type_name", "system_name")
-
-
-@admin.register(MovementAlert)
-class MovementAlertAdmin(admin.ModelAdmin):
-    list_display = (
-        "character_name",
-        "ship_type_name",
-        "old_system",
-        "new_system",
-        "distance_from_home",
-        "created_at",
-    )
-    search_fields = ("character_name", "ship_type_name", "old_system", "new_system")
-    ordering = ("-created_at",)
+    def has_add_permission(self, request):
+        # Only allow one settings row
+        return not CapTrackSettings.objects.exists()

@@ -1,59 +1,59 @@
 {% extends "allianceauth/base.html" %}
 
+{% block title %}CapTrack{% endblock %}
+
 {% block content %}
-<h1>CapTrack Dashboard</h1>
+<div class="container mt-4">
 
-<h2>Tracked Capitals</h2>
-<table class="table table-striped">
-    <thead>
-        <tr>
-            <th>Character</th>
-            <th>Ship</th>
-            <th>System</th>
-            <th>Distance from Home</th>
-            <th>Last Seen</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for cap in capitals %}
-        <tr>
-            <td>{{ cap.character_name }}</td>
-            <td>{{ cap.ship_type_name }}</td>
-            <td>{{ cap.system_name }}</td>
-            <td>{{ cap.distance_from_home }}</td>
-            <td>{{ cap.last_seen }}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="5">No capitals tracked yet.</td></tr>
-        {% endfor %}
-    </tbody>
-</table>
+    <h1 class="mb-4">CapTrack Dashboard</h1>
 
-<h2>Recent Alerts</h2>
-<table class="table table-striped">
-    <thead>
-        <tr>
-            <th>Character</th>
-            <th>Ship</th>
-            <th>From</th>
-            <th>To</th>
-            <th>Distance from Home</th>
-            <th>When</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for alert in alerts %}
-        <tr>
-            <td>{{ alert.character_name }}</td>
-            <td>{{ alert.ship_type_name }}</td>
-            <td>{{ alert.old_system }}</td>
-            <td>{{ alert.new_system }}</td>
-            <td>{{ alert.distance_from_home }}</td>
-            <td>{{ alert.created_at }}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="6">No alerts yet.</td></tr>
+    <!-- Blacklisted Regions -->
+    <h3>Blacklisted Regions</h3>
+    {% if blacklisted_regions %}
+    <ul>
+        {% for region in blacklisted_regions %}
+        <li>{{ region.name }}</li>
         {% endfor %}
-    </tbody>
-</table>
+    </ul>
+    {% else %}
+    <p class="text-muted">No blacklisted regions configured.</p>
+    {% endif %}
+
+    <hr>
+
+    <!-- Capitals in Blacklisted Regions -->
+    <h3>Capitals in Blacklisted Regions</h3>
+
+    {% if regions_with_capitals %}
+    {% for region_data in regions_with_capitals %}
+    <div class="mt-4">
+        <h4>{{ region_data.region.name }}</h4>
+
+        <table class="table table-sm table-striped">
+            <thead>
+                <tr>
+                    <th>Pilot</th>
+                    <th>Ship</th>
+                    <th>System</th>
+                    <th>Structure / Station</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cap in region_data.capitals %}
+                <tr>
+                    <td>{{ cap.character_name }}</td>
+                    <td>{{ cap.ship_type }}</td>
+                    <td>{{ cap.system_name }}</td>
+                    <td>{{ cap.structure_name|default:"(Unknown)" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="text-muted">No capitals found in blacklisted regions.</p>
+    {% endif %}
+
+</div>
 {% endblock %}
