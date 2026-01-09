@@ -8,7 +8,7 @@ setup(
     include_package_data=True,
     install_requires=[
         "allianceauth-corptools==2.15.2,
-    ],
+    ]
     classifiers=[
         "Framework :: Django",
         "Programming Language :: Python :: 3",
