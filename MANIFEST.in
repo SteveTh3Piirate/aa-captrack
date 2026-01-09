@@ -1,0 +1,2 @@
+recursive-include captrack/templates *
+recursive-include captrack/static *
