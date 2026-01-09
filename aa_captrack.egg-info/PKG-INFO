@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: aa-captrack
+Version: 0.1.1
+Summary: Capital ship movement early warning plugin for AllianceAuth
+Classifier: Framework :: Django
+Classifier: Programming Language :: Python :: 3
+License-File: LICENSE
+Requires-Dist: allianceauth-corptools==2.15.2
+Dynamic: classifier
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: summary
