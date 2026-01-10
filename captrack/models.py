@@ -1,5 +1,7 @@
 ﻿from django.db import models
 from eveuniverse.models import EveRegion
+from django.core.exceptions import ValidationError
+import requests
 
 
 class CapTrackSettings(models.Model):
@@ -27,3 +29,21 @@ class CapTrackSettings(models.Model):
 
     def __str__(self):
         return "CapTrack Settings"
+
+    def send_test_webhook(self):
+        """
+        Sends a simple test message to the configured Discord webhook.
+        """
+        if not self.webhook_url:
+            raise ValidationError("Webhook URL is not set.")
+
+        payload = {
+            "content": "CapTrack test webhook successful."
+        }
+
+        response = requests.post(self.webhook_url, json=payload)
+
+        if response.status_code >= 400:
+            raise ValidationError(
+                f"Discord returned HTTP {response.status_code}: {response.text}"
+            )
