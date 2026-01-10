@@ -5,6 +5,73 @@
 
     <h1 class="mb-4">CapTrack Dashboard</h1>
 
+    <style>
+        .captrack-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.9rem;
+        }
+
+        .captrack-chevron {
+            display: inline-block;
+            transition: transform 0.2s ease;
+        }
+
+        details[open] .captrack-chevron {
+            transform: rotate(90deg);
+        }
+
+        .captrack-label-open {
+            display: inline;
+        }
+
+        .captrack-label-close {
+            display: none;
+        }
+
+        details[open] .captrack-label-open {
+            display: none;
+        }
+
+        details[open] .captrack-label-close {
+            display: inline;
+        }
+
+        /* Remove default marker */
+        details > summary::-webkit-details-marker {
+            display: none;
+        }
+
+        /* Full card styling around header + body */
+        details.card {
+            border: 1px solid #444;
+            border-radius: 0.25rem;
+            margin-bottom: 1rem;
+            background-color: #111;
+        }
+
+            /* Dark-theme card header bar */
+            details.card > summary {
+                padding: 0.75rem 1rem;
+                background-color: #222; /* match your dark header vibe */
+                color: #fff;
+                font-weight: 600;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                cursor: pointer;
+                border-radius: 0.25rem 0.25rem 0 0;
+            }
+
+            /* Card body inherits dark background but slightly lighter */
+            details.card .card-body {
+                background-color: #181818;
+                padding: 1rem;
+                border-radius: 0 0 0.25rem 0.25rem;
+            }
+    </style>
+
     <!-- Blacklisted Regions -->
     <h3>Blacklisted Regions</h3>
     {% if blacklisted_regions %}
@@ -24,58 +91,51 @@
 
     {% if groups %}
     {% for group in groups %}
-    {% with collapse_id="captrack-"|add:group.main.character_id|stringformat:"s" %}
-    <div class="card mb-3 mt-4">
 
-        <!-- Card header with toggle -->
-        <div class="card-header d-flex justify-content-between align-items-center bg-body-tertiary text-body">
+    <details class="card mt-4">
+        <summary>
             <span>
                 <img src="{{ group.main.portrait_url_128 }}"
                      class="rounded me-2"
                      width="32" height="32">
                 {{ group.main.character_name }}
             </span>
-            <button class="btn btn-sm btn-outline-primary"
-                    type="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#{{ collapse_id }}"
-                    aria-expanded="false"
-                    aria-controls="{{ collapse_id }}">
-                Toggle
-            </button>
-        </div>
 
-        <!-- Collapsible card body -->
-        <div id="{{ collapse_id }}" class="collapse">
-            <div class="card-body">
-                {% if group.alts %}
-                <table class="table table-sm table-striped">
-                    <thead>
-                        <tr>
-                            <th>Character</th>
-                            <th>Ship</th>
-                            <th>System</th>
-                            <th>Structure / Station</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for alt in group.alts %}
-                        <tr>
-                            <td>{{ alt.ownership.character.character_name }}</td>
-                            <td>{{ alt.ship_type }}</td>
-                            <td>{{ alt.system }}</td>
-                            <td>{{ alt.structure|default:"(Unknown)" }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% else %}
-                <p class="text-muted">No alt characters found.</p>
-                {% endif %}
-            </div>
+            <span class="captrack-toggle text-primary">
+                <span class="captrack-chevron">&#9654;</span>
+                <span class="captrack-label-open">Open</span>
+                <span class="captrack-label-close">Close</span>
+            </span>
+        </summary>
+
+        <div class="card-body">
+            {% if group.alts %}
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Character</th>
+                        <th>Ship</th>
+                        <th>System</th>
+                        <th>Structure / Station</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for alt in group.alts %}
+                    <tr>
+                        <td>{{ alt.ownership.character.character_name }}</td>
+                        <td>{{ alt.ship_type }}</td>
+                        <td>{{ alt.system }}</td>
+                        <td>{{ alt.structure|default:"(Unknown)" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-muted">No alt characters found.</p>
+            {% endif %}
         </div>
-    </div>
-    {% endwith %}
+    </details>
+
     {% endfor %}
     {% else %}
     <p class="text-muted">No capitals found in blacklisted regions.</p>
