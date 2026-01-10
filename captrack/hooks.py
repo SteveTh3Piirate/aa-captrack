@@ -1,7 +1,10 @@
-from allianceauth.hooks import HookSet
+from allianceauth import hooks
+from allianceauth.services.hooks import UrlHook
 
-class CapTrackHookSet(HookSet):
-    def urls_hook(self):
-        return [
-            ("captrack.urls", "captrack", "captrack/")
-        ]
+@hooks.register("url_hook")
+def register_captrack_urls():
+    return UrlHook(
+        "captrack.urls",   # module path
+        "captrack",        # namespace
+        "captrack/"        # prefix
+    )
