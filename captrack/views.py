@@ -1,5 +1,6 @@
 from django.contrib.auth.decorators import login_required, permission_required
 from django.shortcuts import render
+from collections import defaultdict
 
 from .models import CapTrackSettings
 from .services import get_capitals_in_blacklisted_regions
@@ -17,11 +18,21 @@ def dashboard(request):
         blacklisted_regions = []
 
     # Real Corptools-powered capital discovery
-    regions_with_capitals = get_capitals_in_blacklisted_regions(blacklisted_regions)
+    violating_chars = get_capitals_in_blacklisted_regions(blacklisted_regions)
+
+    # Group by main character
+    grouped = defaultdict(lambda: {"main": None, "alts": []})
+
+    for char in violating_chars:
+        user = char.user
+        main = user.profile.main_character
+
+        grouped[main.id]["main"] = main
+        grouped[main.id]["alts"].append(char)
 
     context = {
         "blacklisted_regions": blacklisted_regions,
-        "regions_with_capitals": regions_with_capitals,
+        "groups": grouped.values(),   # <-- send grouped data to template
     }
 
     return render(request, "captrack/dashboard.html", context)

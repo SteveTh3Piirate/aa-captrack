@@ -8,10 +8,9 @@ class CapTrackConfig(AppConfig):
     def ready(self):
         # Import inside ready() to avoid AppRegistryNotReady
         from allianceauth.services.hooks import UrlHook
-        from django.urls import include, path
 
         UrlHook(
-            urlconf_module="captrack.urls",
-            namespace="captrack",
-            url_pattern="captrack/"
+            "captrack.urls",   # module path
+            "captrack",        # namespace
+            "captrack/"        # URL prefix
         )

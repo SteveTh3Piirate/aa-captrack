@@ -24,36 +24,36 @@
     <!-- Capitals in Blacklisted Regions -->
     <h3>Capitals in Blacklisted Regions</h3>
 
-    {% if regions_with_capitals %}
-    {% for region_data in regions_with_capitals %}
+    {% if groups %}
+    {% for group in groups %}
     <div class="mt-4">
-        <h4>{{ region_data.region.name }}</h4>
+
+        <!-- Main Character -->
+        <h4>{{ group.main.character_name }}</h4>
 
         <table class="table table-sm table-striped">
             <thead>
                 <tr>
-                    <th>Pilot</th>
+                    <th>Alt Character</th>
                     <th>Ship</th>
                     <th>System</th>
                     <th>Structure / Station</th>
                 </tr>
             </thead>
             <tbody>
-                {% for cap in region_data.capitals %}
+                {% for alt in group.alts %}
                 <tr>
-                    <td>{{ cap.character_name }}</td>
-                    <td>{{ cap.ship_type }}</td>
-                    <td>{{ cap.system_name }}</td>
-                    <td>{{ cap.structure_name|default:"(Unknown)" }}</td>
+                    <td>{{ alt.character_name }}</td>
+                    <td>{{ alt.ship_type }}</td>
+                    <td>{{ alt.system_name }}</td>
+                    <td>{{ alt.structure_name|default:"(Unknown)" }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+
     </div>
     {% endfor %}
     {% else %}
     <p class="text-muted">No capitals found in blacklisted regions.</p>
     {% endif %}
-
-</div>
-{% endblock %}
