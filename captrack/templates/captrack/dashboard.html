@@ -28,9 +28,10 @@
 
     <div class="card bg-dark border-secondary mb-4">
 
-        <!-- Proper AA/Slate-compatible card header with collapse -->
-        <div class="card-header bg-dark text-white border-bottom border-secondary p-0">
-            <button class="btn btn-link w-100 text-start text-white fw-bold text-decoration-none d-flex justify-content-between align-items-center px-3 py-2"
+        <!-- Header matching Slate navbar -->
+        <div class="card-header bg-dark aa-navbar text-white border-bottom border-secondary p-0">
+            <button class="btn w-100 text-start text-white fw-bold d-flex justify-content-between align-items-center px-3 py-2"
+                    style="text-decoration: none; pointer-events: auto;"
                     type="button"
                     data-bs-toggle="collapse"
                     data-bs-target="#{{ collapse_id }}"
@@ -48,8 +49,8 @@
             </button>
         </div>
 
-        <!-- Collapsible body -->
-        <div id="{{ collapse_id }}" class="collapse">
+        <!-- Collapsible body (overflow fix applied) -->
+        <div id="{{ collapse_id }}" class="collapse" style="overflow: visible;">
             <div class="card-body">
 
                 {% if group.alts %}
