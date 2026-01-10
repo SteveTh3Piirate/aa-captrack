@@ -36,16 +36,28 @@
                 .captrack-table-dark tbody tr:nth-child(even) {
                     background-color: #1C1C1C; /* Slightly lighter Slate tone */
                 }
+
+        /* Multi-column region layout */
+        .captrack-region-columns {
+            column-count: 4;
+            column-gap: 2rem;
+        }
+
+            .captrack-region-columns > div {
+                break-inside: avoid;
+                margin-bottom: 0.5rem;
+                color: #fff;
+            }
     </style>
 
     <!-- Blacklisted Regions -->
     <h3 class="text-white border-bottom pb-2 mb-3">Blacklisted Regions</h3>
     {% if blacklisted_regions %}
-    <ul>
+    <div class="captrack-region-columns">
         {% for region in blacklisted_regions %}
-        <li class="text-white">{{ region.name }}</li>
+        <div>{{ region.name }}</div>
         {% endfor %}
-    </ul>
+    </div>
     {% else %}
     <p class="text-muted">No blacklisted regions configured.</p>
     {% endif %}
