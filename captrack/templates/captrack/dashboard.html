@@ -38,11 +38,6 @@
             display: inline;
         }
 
-        /* Remove default marker */
-        details > summary::-webkit-details-marker {
-            display: none;
-        }
-
         /* Full card styling around header + body */
         details.card {
             border: 1px solid #444;
@@ -54,7 +49,7 @@
             /* Dark-theme card header bar */
             details.card > summary {
                 padding: 0.75rem 1rem;
-                background-color: #222; /* match your dark header vibe */
+                background-color: #222; /* adjust if you want closer to AA */
                 color: #fff;
                 font-weight: 600;
                 display: flex;
@@ -91,7 +86,6 @@
 
     {% if groups %}
     {% for group in groups %}
-
     <details class="card mt-4">
         <summary>
             <span>
@@ -135,7 +129,6 @@
             {% endif %}
         </div>
     </details>
-
     {% endfor %}
     {% else %}
     <p class="text-muted">No capitals found in blacklisted regions.</p>
