@@ -23,16 +23,17 @@ def dashboard(request):
     # Group by main character
     grouped = defaultdict(lambda: {"main": None, "alts": []})
 
-    for char in violating_chars:
-        user = char.user
+    for entry in violating_chars:
+        ownership = entry["ownership"]
+        user = ownership.user
         main = user.profile.main_character
 
         grouped[main.id]["main"] = main
-        grouped[main.id]["alts"].append(char)
+        grouped[main.id]["alts"].append(entry)
 
     context = {
         "blacklisted_regions": blacklisted_regions,
-        "groups": grouped.values(),   # <-- send grouped data to template
+        "groups": grouped.values(),
     }
 
     return render(request, "captrack/dashboard.html", context)
