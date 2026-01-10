@@ -1,27 +1,12 @@
 {% extends "allianceauth/base.html" %}
 
-{% block page_title %}CapTrack{% endblock %}
-
 {% block content %}
 <div class="container mt-4">
 
     <h1 class="mb-4">CapTrack Dashboard</h1>
 
-    <!-- Simple local styles for the CapTrack cards -->
+    <!-- Inline styles for chevron + open/close toggle -->
     <style>
-        /* Container inside details for smooth height transition */
-        .captrack-details-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.25s ease-out;
-        }
-
-        details[open] .captrack-details-content {
-            max-height: 1000px; /* High enough to fit the table */
-            transition: max-height 0.25s ease-in;
-        }
-
-        /* Chevron + text container on the right side */
         .captrack-toggle {
             display: inline-flex;
             align-items: center;
@@ -29,18 +14,15 @@
             font-size: 0.9rem;
         }
 
-        /* Chevron icon */
         .captrack-chevron {
             display: inline-block;
             transition: transform 0.2s ease;
         }
 
-        /* Rotate chevron when open */
         details[open] .captrack-chevron {
             transform: rotate(90deg);
         }
 
-        /* Open / Close text handling */
         .captrack-label-open {
             display: inline;
         }
@@ -79,10 +61,10 @@
     {% for group in groups %}
     <div class="card mb-3 mt-4">
 
-        <!-- Native collapsible wrapper (default collapsed: no 'open' attribute) -->
+        <!-- Collapsible wrapper inside the card -->
         <details>
 
-            <!-- Card header styled as the clickable summary -->
+            <!-- Card header styled as summary -->
             <summary class="card-header d-flex justify-content-between align-items-center"
                      style="cursor: pointer; list-style: none;">
                 <span>
@@ -91,8 +73,6 @@
                          width="32" height="32">
                     {{ group.main.character_name }}
                 </span>
-
-                <!-- Right-hand side: chevron + Open/Close text -->
                 <span class="captrack-toggle text-primary">
                     <span class="captrack-chevron">&#9654;</span>
                     <span class="captrack-label-open">Open</span>
@@ -100,8 +80,8 @@
                 </span>
             </summary>
 
-            <!-- Card body with smooth height transition -->
-            <div class="card-body captrack-details-content">
+            <!-- Card body revealed when open -->
+            <div class="card-body">
 
                 {% if group.alts %}
                 <table class="table table-sm table-striped">
