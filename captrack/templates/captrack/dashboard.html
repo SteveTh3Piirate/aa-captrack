@@ -30,18 +30,25 @@
 
         <!-- Collapsible Main Character Header -->
         <div class="card">
-            <div class="card-header" data-bs-toggle="collapse" data-bs-target="#main-{{ group.main.id }}" style="cursor:pointer;">
-                <img src="{{ group.main.portrait_url_128 }}" class="rounded me-2" width="32" height="32">
-                <strong>{{ group.main.character_name }}</strong>
+            <div class="card-header" id="heading-{{ group.main.id }}">
+                <button class="btn btn-link text-decoration-none" type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#collapse-{{ group.main.id }}"
+                        aria-expanded="false"
+                        aria-controls="collapse-{{ group.main.id }}">
+                    <img src="{{ group.main.portrait_url_128 }}" class="rounded me-2" width="32" height="32">
+                    <strong>{{ group.main.character_name }}</strong>
+                </button>
             </div>
 
-            <div id="main-{{ group.main.id }}" class="collapse">
+            <div id="collapse-{{ group.main.id }}" class="collapse" aria-labelledby="heading-{{ group.main.id }}">
                 <div class="card-body">
 
+                    {% if group.alts %}
                     <table class="table table-sm table-striped">
                         <thead>
                             <tr>
-                                <th>Alt Character</th>
+                                <th>Character</th>
                                 <th>Ship</th>
                                 <th>System</th>
                                 <th>Structure / Station</th>
@@ -58,6 +65,9 @@
                             {% endfor %}
                         </tbody>
                     </table>
+                    {% else %}
+                    <p class="text-muted">No alt characters found.</p>
+                    {% endif %}
 
                 </div>
             </div>
