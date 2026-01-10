@@ -26,17 +26,33 @@ def dashboard(request):
     for entry in violating_chars:
         ownership = entry["ownership"]
         user = ownership.user
-        main = user.profile.main_character
+
+        # Safe fallback if user has no main set
+        main = user.profile.main_character or ownership.character
 
         grouped[main.id]["main"] = main
         grouped[main.id]["alts"].append(entry)
 
-    # Convert dict → list so the template can iterate cleanly
-    groups = list(grouped.values())
+    # Convert dict → list and sort alphabetically by main character name
+    groups = sorted(
+        grouped.values(),
+        key=lambda g: g["main"].character_name.lower()
+    )
+
+    # Sort alts inside each group alphabetically
+    for g in groups:
+        g["alts"] = sorted(
+            g["alts"],
+            key=lambda a: a["ownership"].character.character_name.lower()
+        )
+
+    # Count total violations for dashboard summary
+    total_violations = sum(len(g["alts"]) for g in groups)
 
     context = {
         "blacklisted_regions": blacklisted_regions,
         "groups": groups,
+        "total_violations": total_violations,
     }
 
     return render(request, "captrack/dashboard.html", context)
