@@ -6,8 +6,9 @@
     <h1 class="mb-4 text-white">CapTrack Dashboard</h1>
 
     <style>
+        /* Slate‑accurate card header */
         .captrack-card-header {
-            background-color: #42474C;
+            background-color: #34383D; /* Slate accent grey */
             color: #fff;
             font-weight: 600;
             border-radius: 0.5rem 0.5rem 0 0;
@@ -17,25 +18,24 @@
             align-items: center;
         }
 
-        /* Theme‑matching table styling */
+        /* Slate‑matching table styling */
         .captrack-table-dark {
-            background-color: #34383D;
-            color: #ddd;
+            background-color: #181818; /* Slate card background */
+            color: #ccc; /* Slate normal text */
         }
 
             .captrack-table-dark thead {
-                background-color: #34383D;
+                background-color: #272A2E; /* Slate header/nav */
                 color: #fff;
             }
 
             .captrack-table-dark tbody tr {
-                border-color: #42474C;
+                border-color: #3A3F44; /* Slate border grey */
             }
 
                 .captrack-table-dark tbody tr:nth-child(even) {
-                    background-color: #34383D;
+                    background-color: #1C1C1C; /* Slightly lighter Slate tone */
                 }
-
     </style>
 
     <!-- Blacklisted Regions -->
@@ -59,7 +59,7 @@
     {% for group in groups %}
     {% if group.main %}
 
-    <div class="card mt-4" style="background-color:#111; border:1px solid #444; border-radius:0.5rem;">
+    <div class="card mt-4" style="background-color:#111; border:1px solid #3A3F44; border-radius:0.5rem;">
 
         <div class="captrack-card-header">
             <span>
