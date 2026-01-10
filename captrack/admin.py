@@ -4,10 +4,13 @@ from django.urls import path
 from django.core.exceptions import ValidationError
 from django.utils.safestring import mark_safe
 
-from .models import CapTrackSettings
+from .models import CapTrackSettings, CapWatchlist
 from eveuniverse.models import EveRegion
 
 
+# ------------------------------------------------------------
+#  CapTrack Settings Admin
+# ------------------------------------------------------------
 @admin.register(CapTrackSettings)
 class CapTrackSettingsAdmin(admin.ModelAdmin):
     autocomplete_fields = ("blacklisted_regions",)
@@ -15,14 +18,15 @@ class CapTrackSettingsAdmin(admin.ModelAdmin):
     readonly_fields = ("test_webhook_button",)
 
     def has_add_permission(self, request):
+        # Only one settings object allowed
         return not CapTrackSettings.objects.exists()
 
     def formfield_for_manytomany(self, db_field, request, **kwargs):
         if db_field.name == "blacklisted_regions":
             kwargs["queryset"] = (
                 EveRegion.objects.all()
-                .exclude(name__regex=r"^[A-Z]-R\d{5}$")
-                .exclude(name__regex=r"^[A-Z]{1,2}-\d{2}$")
+                .exclude(name__regex=r"^[A-Z]-R\d{5}$")   # wormhole pseudo-regions
+                .exclude(name__regex=r"^[A-Z]{1,2}-\d{2}$")  # wormhole constellations
             )
         return super().formfield_for_manytomany(db_field, request, **kwargs)
 
@@ -65,3 +69,42 @@ class CapTrackSettingsAdmin(admin.ModelAdmin):
             self.message_user(request, f"Unexpected error: {e}", messages.ERROR)
 
         return redirect("../../")
+
+
+# ------------------------------------------------------------
+#  CapWatchlist Admin
+# ------------------------------------------------------------
+@admin.register(CapWatchlist)
+class CapWatchlistAdmin(admin.ModelAdmin):
+    """
+    Displays characters currently being monitored for capital movement.
+    This list is maintained automatically by the scanner.
+    """
+    list_display = (
+        "character_name",
+        "character_id",
+        "first_detected",
+        "last_seen",
+    )
+    search_fields = (
+        "character__character__character_name",
+        "character__character__character_id",
+    )
+    readonly_fields = (
+        "character",
+        "first_detected",
+        "last_seen",
+    )
+
+    def has_add_permission(self, request):
+        # Watchlist entries are created automatically by the scanner
+        return False
+
+    def character_name(self, obj):
+        return obj.character.character.character_name
+
+    def character_id(self, obj):
+        return obj.character.character.character_id
+
+    character_name.short_description = "Character"
+    character_id.short_description = "Character ID"
