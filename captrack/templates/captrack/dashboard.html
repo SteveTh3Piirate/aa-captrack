@@ -24,6 +24,7 @@
 
     {% if groups %}
     {% for group in groups %}
+    {% if group.main %}
     {% with collapse_id="captrack-"|add:group.main.character_id %}
     <div class="card bg-dark border-secondary mb-4" style="overflow: visible !important;">
 
@@ -82,6 +83,7 @@
 
     </div>
     {% endwith %}
+    {% endif %}
     {% endfor %}
     {% else %}
     <p class="text-muted">No capitals found in blacklisted regions.</p>
