@@ -34,10 +34,10 @@ class CapTrackSettingsAdmin(admin.ModelAdmin):
         if not obj.pk:
             return "Save settings first."
         return mark_safe(
-            '<a class="button" '
-            'style="padding:6px 10px; background:#5e9ed6; color:white; '
-            'border-radius:4px; text-decoration:none;" '
-            'href="test-webhook/">Send Test Webhook</a>'
+            f'<a class="button" '
+            f'style="padding:6px 10px; background:#5e9ed6; color:white; '
+            f'border-radius:4px; text-decoration:none;" '
+            f'href="{obj.pk}/test-webhook/">Send Test Webhook</a>'
         )
 
     test_webhook_button.short_description = "Webhook Test"
@@ -61,7 +61,7 @@ class CapTrackSettingsAdmin(admin.ModelAdmin):
             return redirect("../../")
 
         try:
-            obj.send_test_webhook()  # your existing method
+            obj.send_test_webhook()
             self.message_user(request, "Webhook sent successfully.", messages.SUCCESS)
         except ValidationError as e:
             self.message_user(request, f"Webhook failed: {e}", messages.ERROR)
