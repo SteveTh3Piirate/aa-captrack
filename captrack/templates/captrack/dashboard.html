@@ -38,7 +38,6 @@
             display: inline;
         }
 
-        /* Hide default marker */
         details > summary::-webkit-details-marker {
             display: none;
         }
@@ -63,11 +62,10 @@
 
     {% if groups %}
     {% for group in groups %}
-    <!-- Collapsible card block -->
     <details class="card mb-3 mt-4">
 
-        <!-- Card header styled with Bootstrap classes -->
-        <summary class="card-header bg-dark text-white d-flex justify-content-between align-items-center" style="cursor: pointer;">
+        <!-- Theme-matching card header -->
+        <summary class="card-header bg-body-tertiary text-body d-flex justify-content-between align-items-center" style="cursor: pointer;">
             <span>
                 <img src="{{ group.main.portrait_url_128 }}"
                      class="rounded me-2"
@@ -82,7 +80,6 @@
             </span>
         </summary>
 
-        <!-- Card body -->
         <div class="card-body">
             {% if group.alts %}
             <table class="table table-sm table-striped">
