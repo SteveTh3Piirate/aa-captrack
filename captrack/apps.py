@@ -2,15 +2,14 @@ from django.apps import AppConfig
 
 class CapTrackConfig(AppConfig):
     name = "captrack"
-    label = "captrack"
+    label = "aa_captrack"   # <-- MUST be unique
     verbose_name = "CapTrack"
 
     def ready(self):
-        # Import inside ready() to avoid AppRegistryNotReady
         from allianceauth.services.hooks import UrlHook
 
         UrlHook(
-            "captrack.urls",   # module path
-            "captrack",        # namespace
-            "captrack/"        # URL prefix
+            "captrack.urls",
+            "captrack",
+            "captrack/"
         )
