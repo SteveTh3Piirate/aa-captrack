@@ -47,7 +47,7 @@
     {% if groups %}
     {% for group in groups %}
     {% if group.main %}
-    {% with collapse_id="captrack-"|add:group.main.character.character_id|stringformat:"s" %}
+    {% with collapse_id="captrack-"|add:group.main.character_id|stringformat:"s" %}
     <div class="card mt-4" style="background-color:#111; border:1px solid #444; border-radius:0.5rem;">
 
         <button class="captrack-card-header w-100 text-start"
@@ -57,10 +57,10 @@
                 aria-expanded="false">
 
             <span>
-                <img src="{{ group.main.character.portrait_url_128 }}"
+                <img src="{{ group.main.portrait_url_128 }}"
                      class="rounded me-2"
                      width="32" height="32">
-                {{ group.main.character.character_name }}
+                {{ group.main.character_name }}
             </span>
 
             <span class="text-primary captrack-chevron">&#9654;</span>
