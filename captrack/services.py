@@ -2,7 +2,7 @@ from collections import defaultdict
 
 from corptools.models.assets import CharacterAsset
 from eveuniverse.models import EveRegion
-from allianceauth.eveonline.models import CharacterOwnership
+from allianceauth.authentication.models import CharacterOwnership
 
 
 CAPITAL_GROUP_IDS = [30, 485, 547, 659, 1538]
