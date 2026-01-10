@@ -1,6 +1,7 @@
 ﻿from django.db import models
 from eveuniverse.models import EveRegion
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 import requests
 
 
@@ -47,3 +48,15 @@ class CapTrackSettings(models.Model):
             raise ValidationError(
                 f"Discord returned HTTP {response.status_code}: {response.text}"
             )
+
+
+class CapAlertCooldown(models.Model):
+    """
+    Tracks cooldowns for capital alerts so the same character
+    does not trigger repeated notifications too frequently.
+    """
+    character_id = models.BigIntegerField(db_index=True)
+    last_alert = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return f"Cooldown for {self.character_id} at {self.last_alert}"
