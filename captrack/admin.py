@@ -56,6 +56,10 @@ class CapTrackSettingsAdmin(admin.ModelAdmin):
     def test_webhook_view(self, request, object_id):
         obj = self.get_object(request, object_id)
 
+        if obj is None:
+            self.message_user(request, "Settings object not found.", messages.ERROR)
+            return redirect("../../")
+
         try:
             obj.send_test_webhook()  # your existing method
             self.message_user(request, "Webhook sent successfully.", messages.SUCCESS)
