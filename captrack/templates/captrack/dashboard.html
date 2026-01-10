@@ -1,4 +1,4 @@
-{% extends "allianceauth/base-bs5.html" %}
+﻿{% extends "allianceauth/base-bs5.html" %}
 
 {% block content %}
 <div class="container mt-4">
@@ -7,7 +7,7 @@
 
     <style>
         .captrack-card-header {
-            background-color: #222;
+            background-color: #34383D;
             color: #fff;
             font-weight: 600;
             border-radius: 0.5rem 0.5rem 0 0;
@@ -16,6 +16,29 @@
             justify-content: space-between;
             align-items: center;
         }
+
+        /* Theme‑matching table styling */
+        .captrack-table-dark {
+            background-color: #181818;
+            color: #ddd;
+        }
+
+            .captrack-table-dark thead {
+                background-color: #272A2E;
+                color: #fff;
+            }
+
+            .captrack-table-dark tbody tr {
+                border-color: #42474C;
+            }
+
+                .captrack-table-dark tbody tr:nth-child(even) {
+                    background-color: #42474C;
+                }
+
+                .captrack-table-dark tbody tr:hover {
+                    background-color: #34383D;
+                }
     </style>
 
     <!-- Blacklisted Regions -->
@@ -52,7 +75,7 @@
 
         <div class="card-body" style="background-color:#181818; border-radius:0 0 0.5rem 0.5rem;">
             {% if group.alts %}
-            <table class="table table-sm table-striped table-dark mb-0">
+            <table class="table table-sm captrack-table-dark mb-0">
                 <thead>
                     <tr>
                         <th>Character</th>
