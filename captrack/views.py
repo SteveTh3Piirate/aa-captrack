@@ -1,4 +1,4 @@
-from django.contrib.auth.decorators import login_required, permission_required
+﻿from django.contrib.auth.decorators import login_required, permission_required
 from django.shortcuts import render
 from collections import defaultdict
 
@@ -17,10 +17,10 @@ def dashboard(request):
     else:
         blacklisted_regions = []
 
-    # Real Corptools-powered capital discovery
+    # Pull all characters violating the blacklist rules
     violating_chars = get_capitals_in_blacklisted_regions(blacklisted_regions)
 
-    # Group by main character
+    # Group results by main character
     grouped = defaultdict(lambda: {"main": None, "alts": []})
 
     for entry in violating_chars:
@@ -31,9 +31,12 @@ def dashboard(request):
         grouped[main.id]["main"] = main
         grouped[main.id]["alts"].append(entry)
 
+    # Convert dict → list so the template can iterate cleanly
+    groups = list(grouped.values())
+
     context = {
         "blacklisted_regions": blacklisted_regions,
-        "groups": grouped.values(),
+        "groups": groups,
     }
 
     return render(request, "captrack/dashboard.html", context)
