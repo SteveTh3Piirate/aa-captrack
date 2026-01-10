@@ -2,7 +2,7 @@ from collections import defaultdict
 
 from corptools.models.assets import CharacterAsset
 from eveuniverse.models import EveRegion
-from allianceauth.eveonline.models import EveCharacter
+from allianceauth.eveonline.models import CharacterOwnership
 
 
 CAPITAL_GROUP_IDS = [30, 485, 547, 659, 1538]
@@ -10,7 +10,7 @@ CAPITAL_GROUP_IDS = [30, 485, 547, 659, 1538]
 
 def get_capitals_in_blacklisted_regions(blacklisted_regions):
     """
-    Returns a list of EveCharacter model objects representing characters
+    Returns a list of CharacterOwnership model objects representing characters
     who have capital ships located in blacklisted regions.
     """
 
@@ -48,10 +48,10 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         char_id = asset.character.character.character_id
 
         try:
-            # Convert to a real AllianceAuth EveCharacter model instance
-            char_obj = EveCharacter.objects.get(character_id=char_id)
-            violating_characters.append(char_obj)
-        except EveCharacter.DoesNotExist:
+            # Convert to a real AA CharacterOwnership instance
+            ownership = CharacterOwnership.objects.get(character__character_id=char_id)
+            violating_characters.append(ownership)
+        except CharacterOwnership.DoesNotExist:
             # Skip characters not linked in AA
             continue
 
