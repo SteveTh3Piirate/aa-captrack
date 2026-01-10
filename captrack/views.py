@@ -1,12 +1,16 @@
 ﻿from django.shortcuts import render
 from .models import CapTrackSettings
-from .services import get_capitals_in_blacklisted_regions
+from .services import (
+    get_capitals_in_blacklisted_regions,
+    group_capitals_by_main,
+)
 
 def dashboard(request):
     settings = CapTrackSettings.objects.first()
     blacklisted_regions = settings.blacklisted_regions.all() if settings else []
 
-    groups = get_capitals_in_blacklisted_regions()
+    raw_entries = get_capitals_in_blacklisted_regions(blacklisted_regions)
+    groups = group_capitals_by_main(raw_entries)
 
     return render(
         request,

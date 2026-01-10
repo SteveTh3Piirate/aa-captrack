@@ -10,7 +10,7 @@ CAPITAL_GROUP_IDS = [30, 485, 547, 659, 1538]
 
 def get_capitals_in_blacklisted_regions(blacklisted_regions):
     """
-    Returns a list of dicts containing:
+    Returns a flat list of dicts containing:
     - CharacterOwnership object
     - Ship type
     - System name
@@ -59,3 +59,32 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         })
 
     return output
+
+
+def group_capitals_by_main(entries):
+    """
+    Groups capital entries by main character.
+    Returns a list of dicts with:
+    - main: main character object
+    - alts: list of entries belonging to that main
+    """
+    grouped = defaultdict(lambda: {"main": None, "alts": []})
+
+    for entry in entries:
+        ownership = entry["ownership"]
+        user = ownership.user
+
+        # Determine main character
+        main = getattr(user.profile, "main_character", None)
+        if not main:
+            main = ownership.character
+
+        if not main:
+            continue
+
+        key = main.character_id
+
+        grouped[key]["main"] = main
+        grouped[key]["alts"].append(entry)
+
+    return list(grouped.values())
