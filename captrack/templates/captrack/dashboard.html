@@ -55,12 +55,14 @@
                 data-bs-toggle="collapse"
                 data-bs-target="#{{ collapse_id }}"
                 aria-expanded="false">
+
             <span>
-                <img src="{{ group.main.portrait_url_128 }}"
+                <img src="{{ group.main.character.portrait_url_128 }}"
                      class="rounded me-2"
                      width="32" height="32">
-                {{ group.main.character_name }}
+                {{ group.main.character.character_name }}
             </span>
+
             <span class="text-primary captrack-chevron">&#9654;</span>
         </button>
 
