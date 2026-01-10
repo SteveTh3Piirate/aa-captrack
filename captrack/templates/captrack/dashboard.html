@@ -47,7 +47,7 @@
     {% if groups %}
     {% for group in groups %}
     {% if group.main %}
-    {% with collapse_id="captrack-"|add:group.main.pk|stringformat:"s" %}
+    {% with collapse_id="captrack-"|add:group.main.pk|slugify %}
     <div class="card mt-4" style="background-color:#111; border:1px solid #444; border-radius:0.5rem;">
 
         <button class="captrack-card-header w-100 text-start"
