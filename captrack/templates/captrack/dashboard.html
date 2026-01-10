@@ -5,7 +5,6 @@
 
     <h1 class="mb-4">CapTrack Dashboard</h1>
 
-    <!-- Local styles for collapsible card behaviour -->
     <style>
         .captrack-toggle {
             display: inline-flex;
@@ -39,29 +38,9 @@
             display: inline;
         }
 
-        /* Make summary look like a Bootstrap card header */
-        details.card > summary {
-            padding: 0.75rem 1rem;
-            background-color: var(--bs-card-cap-bg, #f8f9fa);
-            border-bottom: 1px solid var(--bs-border-color, #dee2e6);
-            font-weight: 600;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            border-radius: var(--bs-border-radius) var(--bs-border-radius) 0 0;
-        }
-
         /* Hide default marker */
         details > summary::-webkit-details-marker {
             display: none;
-        }
-
-        /* Ensure card body inherits theme */
-        details.card .card-body {
-            background-color: var(--bs-card-bg);
-            padding: var(--bs-card-spacer-y) var(--bs-card-spacer-x);
-            border-radius: 0 0 var(--bs-border-radius) var(--bs-border-radius);
         }
     </style>
 
@@ -84,12 +63,11 @@
 
     {% if groups %}
     {% for group in groups %}
-
-    <!-- Full-width card containing collapsible content -->
+    <!-- Collapsible card block -->
     <details class="card mb-3 mt-4">
 
-        <!-- Card header -->
-        <summary>
+        <!-- Card header styled with Bootstrap classes -->
+        <summary class="card-header bg-dark text-white d-flex justify-content-between align-items-center" style="cursor: pointer;">
             <span>
                 <img src="{{ group.main.portrait_url_128 }}"
                      class="rounded me-2"
@@ -106,7 +84,6 @@
 
         <!-- Card body -->
         <div class="card-body">
-
             {% if group.alts %}
             <table class="table table-sm table-striped">
                 <thead>
@@ -131,10 +108,8 @@
             {% else %}
             <p class="text-muted">No alt characters found.</p>
             {% endif %}
-
         </div>
     </details>
-
     {% endfor %}
     {% else %}
     <p class="text-muted">No capitals found in blacklisted regions.</p>
