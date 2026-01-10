@@ -14,10 +14,10 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
     who have capital ships located in blacklisted regions.
     """
 
-    # Convert to IDs for faster filtering
-    region_ids = [r.region_id for r in blacklisted_regions]
+    # EveUniverse regions use .id (ESI region ID)
+    region_ids = [r.id for r in blacklisted_regions]
 
-    # Get all character assets that are capital ships
+    # Pull all capital ship assets with full location + type resolution
     assets = (
         CharacterAsset.objects
         .select_related(
@@ -33,7 +33,7 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         .filter(type_name__group__group_id__in=CAPITAL_GROUP_IDS)
     )
 
-    # Filter to only assets located in blacklisted regions
+    # Corptools MapRegion uses .region_id (also ESI region ID)
     assets = [
         a for a in assets
         if a.location_name
@@ -44,11 +44,11 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
     violating_characters = []
 
     for asset in assets:
-        # Extract the character_id from the Corptools asset
+        # Extract the ESI character ID from Corptools
         char_id = asset.character.character.character_id
 
         try:
-            # Convert to a real AA EveCharacter model instance
+            # Convert to a real AllianceAuth EveCharacter model instance
             char_obj = EveCharacter.objects.get(character_id=char_id)
             violating_characters.append(char_obj)
         except EveCharacter.DoesNotExist:
