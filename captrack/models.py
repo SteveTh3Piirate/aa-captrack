@@ -3,6 +3,10 @@ from eveuniverse.models import EveRegion
 
 
 class CapTrackSettings(models.Model):
+    """
+    Stores configuration for CapTrack, including which regions
+    are considered blacklisted for capital ship presence.
+    """
     id = models.BigAutoField(primary_key=True)
 
     blacklisted_regions = models.ManyToManyField(
