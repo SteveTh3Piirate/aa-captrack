@@ -1,10 +1,8 @@
-from django.apps import AppConfig
-from allianceauth.services.hooks import register_hookset
-from .hooks import CapTrackHookSet
+from django.urls import path
+from . import views
 
-class CapTrackConfig(AppConfig):
-    name = "captrack"
-    label = "aa_captrack"
+app_name = "captrack"
 
-    def ready(self):
-        register_hookset(CapTrackHookSet())
+urlpatterns = [
+    path("", views.dashboard, name="dashboard"),
+]
