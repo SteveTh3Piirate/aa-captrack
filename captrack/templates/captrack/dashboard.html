@@ -1,131 +1,58 @@
-{% extends "allianceauth/base.html" %}
+<style>
+    .captrack-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.9rem;
+    }
 
-{% block content %}
-<div class="container mt-4">
+    .captrack-chevron {
+        display: inline-block;
+        transition: transform 0.2s ease;
+    }
 
-    <h1 class="mb-4">CapTrack Dashboard</h1>
+    details[open] .captrack-chevron {
+        transform: rotate(90deg);
+    }
 
-    <style>
-        .captrack-toggle {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.35rem;
-            font-size: 0.9rem;
-        }
+    .captrack-label-open {
+        display: inline;
+    }
 
-        .captrack-chevron {
-            display: inline-block;
-            transition: transform 0.2s ease;
-        }
+    .captrack-label-close {
+        display: none;
+    }
 
-        details[open] .captrack-chevron {
-            transform: rotate(90deg);
-        }
+    details[open] .captrack-label-open {
+        display: none;
+    }
 
-        .captrack-label-open {
-            display: inline;
-        }
+    details[open] .captrack-label-close {
+        display: inline;
+    }
 
-        .captrack-label-close {
-            display: none;
-        }
+    /* Match AA card header styling */
+    details.card > summary {
+        padding: 0.75rem 1rem;
+        background-color: var(--bs-card-cap-bg, #f8f9fa);
+        border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+        font-weight: 600;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        border-radius: var(--bs-border-radius) var(--bs-border-radius) 0 0;
+    }
 
-        details[open] .captrack-label-open {
-            display: none;
-        }
+    /* Remove default triangle */
+    details > summary::-webkit-details-marker {
+        display: none;
+    }
 
-        details[open] .captrack-label-close {
-            display: inline;
-        }
-
-        /* Make summary look like card-header */
-        details.card > summary {
-            padding: 0.75rem 1rem;
-            background-color: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
-            font-weight: 600;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            border-radius: 0.375rem 0.375rem 0 0;
-        }
-
-        /* Remove default triangle */
-        details > summary::-webkit-details-marker {
-            display: none;
-        }
-    </style>
-
-    <!-- Blacklisted Regions -->
-    <h3>Blacklisted Regions</h3>
-    {% if blacklisted_regions %}
-    <ul>
-        {% for region in blacklisted_regions %}
-        <li>{{ region.name }}</li>
-        {% endfor %}
-    </ul>
-    {% else %}
-    <p class="text-muted">No blacklisted regions configured.</p>
-    {% endif %}
-
-    <hr>
-
-    <!-- Capitals in Blacklisted Regions -->
-    <h3>Capitals in Blacklisted Regions</h3>
-
-    {% if groups %}
-    {% for group in groups %}
-    <!-- Card-style collapsible block -->
-    <details class="card mb-3 mt-4">
-
-        <summary>
-            <span>
-                <img src="{{ group.main.portrait_url_128 }}"
-                     class="rounded me-2"
-                     width="32" height="32">
-                {{ group.main.character_name }}
-            </span>
-            <span class="captrack-toggle text-primary">
-                <span class="captrack-chevron">&#9654;</span>
-                <span class="captrack-label-open">Open</span>
-                <span class="captrack-label-close">Close</span>
-            </span>
-        </summary>
-
-        <div class="card-body">
-
-            {% if group.alts %}
-            <table class="table table-sm table-striped">
-                <thead>
-                    <tr>
-                        <th>Character</th>
-                        <th>Ship</th>
-                        <th>System</th>
-                        <th>Structure / Station</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for alt in group.alts %}
-                    <tr>
-                        <td>{{ alt.ownership.character.character_name }}</td>
-                        <td>{{ alt.ship_type }}</td>
-                        <td>{{ alt.system }}</td>
-                        <td>{{ alt.structure|default:"(Unknown)" }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% else %}
-            <p class="text-muted">No alt characters found.</p>
-            {% endif %}
-
-        </div>
-    </details>
-    {% endfor %}
-    {% else %}
-    <p class="text-muted">No capitals found in blacklisted regions.</p>
-    {% endif %}
-
-</div>
-{% endblock %}
+    /* Ensure card-body inherits theme */
+    details.card .card-body {
+        background-color: var(--bs-card-bg);
+        padding: var(--bs-card-spacer-y) var(--bs-card-spacer-x);
+        border-radius: 0 0 var(--bs-border-radius) var(--bs-border-radius);
+    }
+</style>
