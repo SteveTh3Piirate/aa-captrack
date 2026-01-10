@@ -15,7 +15,6 @@ class CapTrackSettingsAdmin(admin.ModelAdmin):
     readonly_fields = ("test_webhook_button",)
 
     def has_add_permission(self, request):
-        # Only allow one settings row
         return not CapTrackSettings.objects.exists()
 
     def formfield_for_manytomany(self, db_field, request, **kwargs):
@@ -27,9 +26,6 @@ class CapTrackSettingsAdmin(admin.ModelAdmin):
             )
         return super().formfield_for_manytomany(db_field, request, **kwargs)
 
-    # -----------------------------
-    # Test Webhook Button
-    # -----------------------------
     def test_webhook_button(self, obj):
         if not obj.pk:
             return "Save settings first."
@@ -37,7 +33,7 @@ class CapTrackSettingsAdmin(admin.ModelAdmin):
             f'<a class="button" '
             f'style="padding:6px 10px; background:#5e9ed6; color:white; '
             f'border-radius:4px; text-decoration:none;" '
-            f'href="{obj.pk}/test-webhook/">Send Test Webhook</a>'
+            f'href="../{obj.pk}/test-webhook/">Send Test Webhook</a>'
         )
 
     test_webhook_button.short_description = "Webhook Test"
