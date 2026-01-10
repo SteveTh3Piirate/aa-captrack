@@ -1,6 +1,4 @@
 from django.apps import AppConfig
-from allianceauth.services.hooks import UrlHook
-from django.urls import include, path
 
 class CapTrackConfig(AppConfig):
     name = "captrack"
@@ -8,6 +6,10 @@ class CapTrackConfig(AppConfig):
     verbose_name = "CapTrack"
 
     def ready(self):
+        # Import inside ready() to avoid AppRegistryNotReady
+        from allianceauth.services.hooks import UrlHook
+        from django.urls import include, path
+
         UrlHook(
             urlconf_module="captrack.urls",
             namespace="captrack",
