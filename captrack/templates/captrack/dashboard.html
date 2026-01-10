@@ -28,29 +28,40 @@
     {% for group in groups %}
     <div class="mt-4">
 
-        <!-- Main Character -->
-        <h4>{{ group.main.character_name }}</h4>
+        <!-- Collapsible Main Character Header -->
+        <div class="card">
+            <div class="card-header" data-bs-toggle="collapse" data-bs-target="#main-{{ group.main.id }}" style="cursor:pointer;">
+                <img src="{{ group.main.portrait_url_128 }}" class="rounded me-2" width="32" height="32">
+                <strong>{{ group.main.character_name }}</strong>
+            </div>
 
-        <table class="table table-sm table-striped">
-            <thead>
-                <tr>
-                    <th>Alt Character</th>
-                    <th>Ship</th>
-                    <th>System</th>
-                    <th>Structure / Station</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for alt in group.alts %}
-                <tr>
-                    <td>{{ alt.character_name }}</td>
-                    <td>{{ alt.ship_type }}</td>
-                    <td>{{ alt.system_name }}</td>
-                    <td>{{ alt.structure_name|default:"(Unknown)" }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+            <div id="main-{{ group.main.id }}" class="collapse">
+                <div class="card-body">
+
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                <th>Alt Character</th>
+                                <th>Ship</th>
+                                <th>System</th>
+                                <th>Structure / Station</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for alt in group.alts %}
+                            <tr>
+                                <td>{{ alt.ownership.character.character_name }}</td>
+                                <td>{{ alt.ship_type }}</td>
+                                <td>{{ alt.system }}</td>
+                                <td>{{ alt.structure }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+
+                </div>
+            </div>
+        </div>
 
     </div>
     {% endfor %}
