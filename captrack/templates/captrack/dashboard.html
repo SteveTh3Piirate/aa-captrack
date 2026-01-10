@@ -5,55 +5,31 @@
 
     <h1 class="mb-4">CapTrack Dashboard</h1>
 
-    <style>
-        /* Dark-theme card header styled like AA */
-        .captrack-card-header {
-            background-color: #222;
-            color: #fff;
-            font-weight: 600;
-            cursor: pointer;
-            border-radius: 0.5rem 0.5rem 0 0;
-            padding: 0.75rem 1rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-            /* Chevron rotation when expanded */
-            .captrack-card-header[aria-expanded="true"] .captrack-chevron {
-                transform: rotate(90deg);
-            }
-
-        .captrack-chevron {
-            transition: transform 0.2s ease;
-        }
-    </style>
-
     <!-- Blacklisted Regions -->
-    <h3>Blacklisted Regions</h3>
+    <h3 class="mb-3">Blacklisted Regions</h3>
     {% if blacklisted_regions %}
-    <ul>
+    <ul class="mb-4">
         {% for region in blacklisted_regions %}
         <li>{{ region.name }}</li>
         {% endfor %}
     </ul>
     {% else %}
-    <p class="text-muted">No blacklisted regions configured.</p>
+    <p class="text-muted mb-4">No blacklisted regions configured.</p>
     {% endif %}
 
     <hr>
 
     <!-- Capitals in Blacklisted Regions -->
-    <h3>Capitals in Blacklisted Regions</h3>
+    <h3 class="mb-3">Capitals in Blacklisted Regions</h3>
 
     {% if groups %}
     {% for group in groups %}
     {% with collapse_id="captrack-"|add:group.main.character_id %}
 
-    <div class="card mt-4" style="background-color:#111; border:1px solid #444; border-radius:0.5rem;">
+    <div class="card bg-dark border-secondary mb-4">
 
-        <!-- Clickable Bootstrap header -->
-        <button class="captrack-card-header w-100 text-start"
+        <!-- AA-style card header with collapse -->
+        <button class="card-header d-flex justify-content-between align-items-center text-start bg-secondary text-white"
                 type="button"
                 data-bs-toggle="collapse"
                 data-bs-target="#{{ collapse_id }}"
@@ -67,15 +43,15 @@
                 {{ group.main.character_name }}
             </span>
 
-            <span class="text-primary captrack-chevron">&#9654;</span>
+            <span class="text-light">&#9654;</span>
         </button>
 
         <!-- Collapsible body -->
         <div id="{{ collapse_id }}" class="collapse">
-            <div class="card-body" style="background-color:#181818; border-radius:0 0 0.5rem 0.5rem;">
+            <div class="card-body">
 
                 {% if group.alts %}
-                <table class="table table-sm table-striped">
+                <table class="table table-sm table-striped table-dark mb-0">
                     <thead>
                         <tr>
                             <th>Character</th>
@@ -96,7 +72,7 @@
                     </tbody>
                 </table>
                 {% else %}
-                <p class="text-muted">No alt characters found.</p>
+                <p class="text-muted mb-0">No alt characters found.</p>
                 {% endif %}
 
             </div>
