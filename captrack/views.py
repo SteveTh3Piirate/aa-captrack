@@ -1,2 +1,4 @@
-﻿def dashboard(request):
+﻿from django.shortcuts import render
+
+def dashboard(request):
     return render(request, "captrack/dashboard.html", {})
