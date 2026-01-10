@@ -29,22 +29,24 @@
     <div class="card bg-dark border-secondary mb-4">
 
         <!-- AA-style card header with collapse -->
-        <button class="card-header d-flex justify-content-between align-items-center text-start bg-secondary text-white"
-                type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#{{ collapse_id }}"
-                aria-expanded="false"
-                aria-controls="{{ collapse_id }}">
+        <div class="card-header bg-secondary text-white">
+            <a class="d-flex justify-content-between align-items-center text-decoration-none text-white"
+               data-bs-toggle="collapse"
+               href="#{{ collapse_id }}"
+               role="button"
+               aria-expanded="false"
+               aria-controls="{{ collapse_id }}">
 
-            <span>
-                <img src="{{ group.main.portrait_url_128 }}"
-                     class="rounded me-2"
-                     width="32" height="32">
-                {{ group.main.character_name }}
-            </span>
+                <span>
+                    <img src="{{ group.main.portrait_url_128 }}"
+                         class="rounded me-2"
+                         width="32" height="32">
+                    {{ group.main.character_name }}
+                </span>
 
-            <span class="text-light">&#9654;</span>
-        </button>
+                <span class="text-light">&#9654;</span>
+            </a>
+        </div>
 
         <!-- Collapsible body -->
         <div id="{{ collapse_id }}" class="collapse">
