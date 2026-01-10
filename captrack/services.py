@@ -1,8 +1,8 @@
 from collections import defaultdict
 
 from corptools.models.assets import CharacterAsset
-from corptools.models.audits import CharacterAudit
 from eveuniverse.models import EveRegion
+from allianceauth.eveonline.models import EveCharacter
 
 
 CAPITAL_GROUP_IDS = [30, 485, 547, 659, 1538]
@@ -10,20 +10,8 @@ CAPITAL_GROUP_IDS = [30, 485, 547, 659, 1538]
 
 def get_capitals_in_blacklisted_regions(blacklisted_regions):
     """
-    Returns a structure:
-    [
-        {
-            "region": EveRegion,
-            "capitals": [
-                {
-                    "character_name": str,
-                    "ship_type": str,
-                    "system_name": str,
-                    "structure_name": str or None,
-                }
-            ]
-        }
-    ]
+    Returns a list of EveCharacter model objects representing characters
+    who have capital ships located in blacklisted regions.
     """
 
     # Convert to IDs for faster filtering
@@ -50,28 +38,21 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         a for a in assets
         if a.location_name
         and a.location_name.system
-        and a.location_name.system.constellation.region.region_id in region_ids
+        and a.location_name.system.constellation.region.id in region_ids
     ]
 
-    # Group by region
-    grouped = defaultdict(list)
+    violating_characters = []
 
     for asset in assets:
-        region = asset.location_name.system.constellation.region
+        # Extract the character_id from the Corptools asset
+        char_id = asset.character.character.character_id
 
-        grouped[region].append({
-            "character_name": asset.character.character.character_name,
-            "ship_type": asset.type_name.name,
-            "system_name": asset.location_name.system.name,
-            "structure_name": asset.location_name.location_name,
-        })
+        try:
+            # Convert to a real AA EveCharacter model instance
+            char_obj = EveCharacter.objects.get(character_id=char_id)
+            violating_characters.append(char_obj)
+        except EveCharacter.DoesNotExist:
+            # Skip characters not linked in AA
+            continue
 
-    # Convert to list format for template
-    output = []
-    for region, capitals in grouped.items():
-        output.append({
-            "region": region,
-            "capitals": capitals,
-        })
-
-    return output
+    return violating_characters
