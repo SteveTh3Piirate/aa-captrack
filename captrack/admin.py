@@ -15,9 +15,7 @@ class CapTrackSettingsAdmin(admin.ModelAdmin):
     def formfield_for_manytomany(self, db_field, request, **kwargs):
         if db_field.name == "blacklisted_regions":
             kwargs["queryset"] = (
-                EveRegion.objects.filter(
-                    eve_category=EveRegion.EveCategory.REGION
-                )
+                EveRegion.objects.all()
                 .exclude(name__regex=r"^[A-Z]-R\d{5}$")      # wormhole pseudo-regions
                 .exclude(name__regex=r"^[A-Z]{1,2}-\d{2}$")  # wormhole constellations like VR-01
             )
