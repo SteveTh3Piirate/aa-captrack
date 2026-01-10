@@ -53,7 +53,7 @@
                                 <td>{{ alt.ownership.character.character_name }}</td>
                                 <td>{{ alt.ship_type }}</td>
                                 <td>{{ alt.system }}</td>
-                                <td>{{ alt.structure }}</td>
+                                <td>{{ alt.structure|default:"(Unknown)" }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
