@@ -15,7 +15,7 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
     """
 
     # Convert to IDs for faster filtering
-    region_ids = [r.id for r in blacklisted_regions]
+    region_ids = [r.region_id for r in blacklisted_regions]
 
     # Get all character assets that are capital ships
     assets = (
@@ -38,7 +38,7 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         a for a in assets
         if a.location_name
         and a.location_name.system
-        and a.location_name.system.constellation.region.id in region_ids
+        and a.location_name.system.constellation.region.region_id in region_ids
     ]
 
     violating_characters = []
