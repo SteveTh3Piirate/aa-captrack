@@ -7,7 +7,7 @@ from .services import get_capitals_in_blacklisted_regions
 from .models import CapAlertCooldown
 
 
-COOLDOWN_MINUTES = 30
+COOLDOWN_MINUTES = 1 # minutes
 
 
 @shared_task
