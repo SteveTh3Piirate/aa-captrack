@@ -15,6 +15,12 @@ class CapTrackSettings(models.Model):
         help_text="Select regions to blacklist for capital tracking."
     )
 
+    webhook_url = models.URLField(
+        blank=True,
+        null=True,
+        help_text="Discord webhook URL for cap notifications."
+    )
+
     class Meta:
         verbose_name = "CapTrack settings"
         verbose_name_plural = "CapTrack settings"
