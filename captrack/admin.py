@@ -33,7 +33,7 @@ class CapTrackSettingsAdmin(admin.ModelAdmin):
             f'<a class="button" '
             f'style="padding:6px 10px; background:#5e9ed6; color:white; '
             f'border-radius:4px; text-decoration:none;" '
-            f'href="../{obj.pk}/test-webhook/">Send Test Webhook</a>'
+            f'href="../../{obj.pk}/test-webhook/">Send Test Webhook</a>'
         )
 
     test_webhook_button.short_description = "Webhook Test"
