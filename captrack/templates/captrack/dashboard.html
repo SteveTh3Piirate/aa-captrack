@@ -25,7 +25,6 @@
     {% if groups %}
     {% for group in groups %}
     {% with collapse_id="captrack-"|add:group.main.character_id %}
-
     <div class="card bg-dark border-secondary mb-4">
 
         <!-- Header matching Slate navbar -->
@@ -82,7 +81,6 @@
         </div>
 
     </div>
-
     {% endwith %}
     {% endfor %}
     {% else %}
