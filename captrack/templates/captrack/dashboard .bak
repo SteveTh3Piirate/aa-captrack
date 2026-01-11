@@ -1,0 +1,245 @@
+﻿{% extends "allianceauth/base-bs5.html" %}
+{% load humanize %}
+
+{% block content %}
+<div class="container mt-4">
+
+    <h1 class="mb-4 text-white">CapTrack Dashboard</h1>
+
+    <style>
+        .captrack-card-header {
+            background-color: #34383D;
+            color: #fff;
+            font-weight: 600;
+            border-radius: 0.5rem 0.5rem 0 0;
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .captrack-table-dark {
+            background-color: #181818;
+            color: #ccc;
+        }
+
+            .captrack-table-dark thead {
+                background-color: #272A2E;
+                color: #fff;
+            }
+
+            .captrack-table-dark tbody tr {
+                border-color: #3A3F44;
+            }
+
+                .captrack-table-dark tbody tr:nth-child(even) {
+                    background-color: #1C1C1C;
+                }
+
+        .captrack-region-columns {
+            column-count: 4;
+            column-gap: 2rem;
+        }
+
+            .captrack-region-columns > div {
+                break-inside: avoid;
+                margin-bottom: 0.5rem;
+                color: #fff;
+            }
+
+        .alert-badge {
+            padding: 0.2rem 0.5rem;
+            border-radius: 0.4rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .alert-critical {
+            background: #8B0000;
+            color: #fff;
+        }
+
+        .alert-high {
+            background: #E67E22;
+            color: #000;
+        }
+
+        .alert-medium {
+            background: #F1C40F;
+            color: #000;
+        }
+
+        .alert-industrial {
+            background: #3498DB;
+            color: #fff;
+        }
+
+        .alert-unknown {
+            background: #7F8C8D;
+            color: #fff;
+        }
+
+        .snoozed {
+            color: #9B59B6;
+            font-weight: 600;
+        }
+
+        .captrack-actions .btn {
+            padding: 0.15rem 0.4rem;
+            font-size: 0.75rem;
+            line-height: 1.2;
+        }
+
+        /* Critical row highlight */
+        .row-critical {
+            box-shadow: inset 4px 0 0 #8B0000;
+            background-color: rgba(139, 0, 0, 0.08) !important;
+        }
+    </style>
+
+    <h3 class="text-white border-bottom pb-2 mb-3">Blacklisted Regions</h3>
+    {% if blacklisted_regions %}
+    <div class="captrack-region-columns">
+        {% for region in blacklisted_regions %}
+        <div>{{ region.name }}</div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted">No blacklisted regions configured.</p>
+    {% endif %}
+
+    <hr class="border-secondary">
+
+    <h3 class="text-white border-bottom pb-2 mb-3">Capitals in Blacklisted Regions</h3>
+
+    {% if groups %}
+    {% for group in groups %}
+    {% if group.main %}
+
+    <div class="card mt-4" style="background-color:#111; border:1px solid #3A3F44; border-radius:0.5rem;">
+
+        <div class="captrack-card-header">
+            <span>
+                <img src="{{ group.main.portrait_url_128 }}"
+                     class="rounded me-2"
+                     width="32" height="32">
+                {{ group.main.character_name }}
+            </span>
+
+            <span class="alert-badge alert-{{ group.max_alert_level|default:'unknown' }}">
+                {{ group.max_alert_level|default:"unknown" }}
+            </span>
+        </div>
+
+        <div class="card-body" style="background-color:#181818; border-radius:0 0 0.5rem 0.5rem;">
+            {% if group.alts %}
+            <table class="table table-sm captrack-table-dark mb-0">
+                <thead>
+                    <tr>
+                        <th>Character</th>
+                        <th>Ship</th>
+                        <th>Alert</th>
+                        <th>System</th>
+                        <th>Structure / Station</th>
+                        <th>Last Seen</th>
+                        <th>Status</th>
+                        <th style="min-width: 220px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for alt in group.alts %}
+                    <tr class="{% if alt.alert_level == 'critical' %}row-critical{% endif %}">
+                        <td>{{ alt.character_name }}</td>
+                        <td>{{ alt.ship_type }}</td>
+                        <td>
+                            <span class="alert-badge alert-{{ alt.alert_level|default:'unknown' }}">
+                                {{ alt.alert_level|default:"unknown" }}
+                            </span>
+                        </td>
+                        <td>{{ alt.system }}</td>
+                        <td>{{ alt.structure|default:"(Unknown)" }}</td>
+                        <td>
+                            {% if alt.last_seen %}
+                            {{ alt.last_seen|naturaltime }}
+                            {% else %}
+                            —
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if alt.is_snoozed %}
+                            <span class="snoozed">Snoozed</span>
+                            {% if alt.alert_snoozed_until %}
+                            <span class="text-muted">({{ alt.alert_snoozed_until|naturaltime }})</span>
+                            {% endif %}
+                            {% elif not alt.should_alert %}
+                            Tracked
+                            {% else %}
+                            Alerting
+                            {% endif %}
+                        </td>
+
+                        <td class="captrack-actions">
+                            {% if alt.watchlist_id %}
+                            <form method="post" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="watchlist_id" value="{{ alt.watchlist_id }}">
+
+                                <button class="btn btn-outline-light btn-sm"
+                                        type="submit"
+                                        name="snooze_action"
+                                        value="1h"
+                                        {% if alt.is_snoozed %}disabled{% endif %}>
+                                    Snooze 1h
+                                </button>
+
+                                <button class="btn btn-outline-light btn-sm"
+                                        type="submit"
+                                        name="snooze_action"
+                                        value="6h"
+                                        {% if alt.is_snoozed %}disabled{% endif %}>
+                                    6h
+                                </button>
+
+                                <button class="btn btn-outline-light btn-sm"
+                                        type="submit"
+                                        name="snooze_action"
+                                        value="24h"
+                                        {% if alt.is_snoozed %}disabled{% endif %}>
+                                    24h
+                                </button>
+
+                                <button class="btn btn-outline-secondary btn-sm"
+                                        type="submit"
+                                        name="snooze_action"
+                                        value="clear">
+                                    Clear
+                                </button>
+                            </form>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-muted mb-0">No alt characters found.</p>
+            {% endif %}
+        </div>
+
+    </div>
+
+    {% endif %}
+    {% endfor %}
+    {% else %}
+    <p class="text-muted">No capitals found in blacklisted regions.</p>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+{% endblock %}
