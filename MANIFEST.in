@@ -1,2 +1,6 @@
+include README.md
+include LICENSE
+recursive-include images *.jpg *.png *.gif
 recursive-include captrack/templates *
 recursive-include captrack/static *
+recursive-include captrack/migrations *.py
