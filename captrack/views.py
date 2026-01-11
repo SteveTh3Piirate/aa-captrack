@@ -12,7 +12,7 @@ from .services import get_capitals_in_blacklisted_regions, group_capitals_by_mai
 def _level_rank(level: str) -> int:
     """
     Higher number = more severe.
-    Ordering requested:
+    Ordering:
       CRITICAL > HIGH > MEDIUM > LOW > INDUSTRIAL > UNKNOWN
     """
     return {
@@ -24,6 +24,23 @@ def _level_rank(level: str) -> int:
         "unknown": 0,
         None: 0,
     }.get((level or "unknown").lower(), 0)
+
+
+def _supercap_priority(ship_group_id) -> int:
+    """
+    Within the same severity (especially CRITICAL), prefer:
+      Titan (30) > Supercarrier (659) > everything else
+    """
+    try:
+        gid = int(ship_group_id)
+    except (TypeError, ValueError):
+        gid = None
+
+    if gid == 30:   # Titan
+        return 2
+    if gid == 659:  # Supercarrier
+        return 1
+    return 0
 
 
 @login_required
@@ -92,11 +109,14 @@ def dashboard(request):
     for group in groups:
         entries = group.get("alts", [])
 
-        # Sort rows within each main by severity (highest first),
-        # then by character name for stable ordering.
+        # Sort rows within each main:
+        # 1) severity
+        # 2) supercap priority (Titan > Supercarrier)
+        # 3) character name for stability
         entries.sort(
             key=lambda e: (
                 -_level_rank(e.get("alert_level") or e.get("risk") or "unknown"),
+                -_supercap_priority(e.get("ship_group_id")),
                 (e.get("character_name") or "").lower(),
             )
         )

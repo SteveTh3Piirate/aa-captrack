@@ -58,6 +58,23 @@ def _rank_alert_level(level: str) -> int:
     return {"critical": 4, "high": 3, "medium": 2, "industrial": 1, "unknown": 0}.get(level or "unknown", 0)
 
 
+def _supercap_priority(ship_group_id) -> int:
+    """
+    Within the same severity (especially CRITICAL), prefer:
+      Titan (30) > Supercarrier (659) > everything else
+    """
+    try:
+        gid = int(ship_group_id)
+    except (TypeError, ValueError):
+        gid = None
+
+    if gid == 30:   # Titan
+        return 2
+    if gid == 659:  # Supercarrier
+        return 1
+    return 0
+
+
 # ------------------------------------------------------------------
 # Single-character embed (kept for compatibility)
 # ------------------------------------------------------------------
@@ -139,10 +156,23 @@ def build_captrack_main_embed(
     style = ALERT_STYLES.get(max_level, ALERT_STYLES["unknown"])
     embed_title = title or f"{style['emoji']} {style['title']} • {main_character_name}"
 
+    # Order entries for display:
+    # 1) severity (critical > high > ...)
+    # 2) supercap priority (Titan > Supercarrier)
+    # 3) character name (stable)
+    ordered_entries = sorted(
+        entries,
+        key=lambda e: (
+            -_rank_alert_level(e.get("alert_level") or e.get("risk") or "unknown"),
+            -_supercap_priority(e.get("ship_group_id")),
+            (e.get("character_name") or "").lower(),
+        ),
+    )
+
     # Build a compact per-alt listing
     # One field value max is 1024 chars; be safe.
     lines = []
-    for e in entries:
+    for e in ordered_entries:
         lvl = (e.get("alert_level") or e.get("risk") or "unknown").upper()
         ch_name = e.get("character_name") or "Unknown"
         ship = e.get("ship_type") or "Unknown ship"
