@@ -8,6 +8,9 @@ class CapTrackConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
 
     def ready(self):
+        # Always register hooks (sidebar/menu)
+        import captrack.hooks  # noqa
+
         # Avoid importing tasks (and thus corptools) during migration-related commands
         skip_cmds = {"makemigrations", "migrate", "showmigrations", "check", "collectstatic"}
         if any(cmd in sys.argv for cmd in skip_cmds):
