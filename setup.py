@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="aa-captrack",
-    version="0.1.2",
+    version="0.1.3",
     description="Capital ship movement early warning plugin for AllianceAuth",
     packages=find_packages(),
     include_package_data=True,
