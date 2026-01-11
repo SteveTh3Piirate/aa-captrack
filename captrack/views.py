@@ -1,4 +1,5 @@
-﻿from datetime import timedelta
+﻿from collections import Counter
+from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required, permission_required
 from django.shortcuts import render
@@ -9,12 +10,12 @@ from .models import CapTrackSettings, CapWatchlist
 from .services import get_capitals_in_blacklisted_regions, group_capitals_by_main
 
 
+ALWAYS_ALERT_GROUP_IDS = {30, 659}            # Titan, Supercarrier
+THRESHOLD_GROUP_IDS = {485, 1972, 547, 1538}  # Dread, Lancer, Carrier, FAX
+ALERT_THRESHOLD = 5
+
+
 def _level_rank(level: str) -> int:
-    """
-    Higher number = more severe.
-    Ordering:
-      CRITICAL > HIGH > MEDIUM > LOW > INDUSTRIAL > UNKNOWN
-    """
     return {
         "critical": 5,
         "high": 4,
@@ -27,18 +28,9 @@ def _level_rank(level: str) -> int:
 
 
 def _supercap_priority(ship_group_id) -> int:
-    """
-    Within the same severity (especially CRITICAL), prefer:
-      Titan (30) > Supercarrier (659) > everything else
-    """
-    try:
-        gid = int(ship_group_id)
-    except (TypeError, ValueError):
-        gid = None
-
-    if gid == 30:   # Titan
+    if ship_group_id == 30:
         return 2
-    if gid == 659:  # Supercarrier
+    if ship_group_id == 659:
         return 1
     return 0
 
@@ -48,13 +40,10 @@ def _supercap_priority(ship_group_id) -> int:
 def dashboard(request):
     now = timezone.now()
 
-    # -----------------------------
-    # Handle snooze actions (POST)
-    # -----------------------------
+    # Snooze handling (unchanged)
     if request.method == "POST":
         watchlist_id = request.POST.get("watchlist_id")
         snooze_action = request.POST.get("snooze_action")
-
         if watchlist_id and snooze_action:
             try:
                 wl = CapWatchlist.objects.get(pk=int(watchlist_id))
@@ -70,18 +59,10 @@ def dashboard(request):
                     wl.alert_snoozed_until = now + timedelta(hours=6)
                 elif snooze_action == "24h":
                     wl.alert_snoozed_until = now + timedelta(hours=24)
-                else:
-                    wl = None
+                wl.save(update_fields=["alert_snoozed_until"])
 
-                if wl:
-                    wl.save(update_fields=["alert_snoozed_until"])
-
-    # -----------------------------
-    # Build dashboard context
-    # -----------------------------
     settings = CapTrackSettings.objects.first()
     blacklisted_regions = settings.blacklisted_regions.all() if settings else []
-
     raw_entries = get_capitals_in_blacklisted_regions(blacklisted_regions)
 
     watchlist_by_ownership_id = {
@@ -93,57 +74,57 @@ def dashboard(request):
         ownership = entry.get("ownership")
         if not ownership:
             continue
-
         wl = watchlist_by_ownership_id.get(ownership.pk)
         if not wl:
             continue
-
-        entry["watchlist_id"] = wl.pk
-        entry["last_seen"] = wl.last_seen
-        entry["last_alert_sent"] = wl.last_alert_sent
-        entry["alert_snoozed_until"] = wl.alert_snoozed_until
-        entry["is_snoozed"] = wl.alert_snoozed_until is not None and wl.alert_snoozed_until > now
+        entry.update({
+            "watchlist_id": wl.pk,
+            "last_seen": wl.last_seen,
+            "last_alert_sent": wl.last_alert_sent,
+            "alert_snoozed_until": wl.alert_snoozed_until,
+            "is_snoozed": wl.alert_snoozed_until and wl.alert_snoozed_until > now,
+        })
 
     groups = group_capitals_by_main(raw_entries)
 
     for group in groups:
         entries = group.get("alts", [])
+        counts = Counter(e.get("ship_group_id") for e in entries)
 
-        # Sort rows within each main:
-        # 1) severity
-        # 2) supercap priority (Titan > Supercarrier)
-        # 3) character name for stability
+        for e in entries:
+            gid = e.get("ship_group_id")
+
+            if gid in ALWAYS_ALERT_GROUP_IDS:
+                e["should_alert"] = True
+            elif gid in THRESHOLD_GROUP_IDS:
+                e["should_alert"] = counts.get(gid, 0) >= ALERT_THRESHOLD
+            else:
+                e["should_alert"] = False
+
         entries.sort(
             key=lambda e: (
-                -_level_rank(e.get("alert_level") or e.get("risk") or "unknown"),
+                -_level_rank(e.get("alert_level")),
                 -_supercap_priority(e.get("ship_group_id")),
                 (e.get("character_name") or "").lower(),
             )
         )
+
         group["alts"] = entries
-
-        # Group max severity badge
-        levels = {e.get("alert_level") for e in entries}
-        if "critical" in levels:
-            group["max_alert_level"] = "critical"
-        elif "high" in levels:
-            group["max_alert_level"] = "high"
-        elif "medium" in levels:
-            group["max_alert_level"] = "medium"
-        elif "low" in levels:
-            group["max_alert_level"] = "low"
-        elif "industrial" in levels:
-            group["max_alert_level"] = "industrial"
-        else:
-            group["max_alert_level"] = "unknown"
-
         group["total_capitals"] = len(entries)
         group["alerting_capitals"] = sum(1 for e in entries if e.get("should_alert"))
 
-    # Sort groups (mains) by max severity, then name
+        levels = {e.get("alert_level") for e in entries if e.get("should_alert")}
+        group["max_alert_level"] = (
+            "critical" if "critical" in levels else
+            "high" if "high" in levels else
+            "medium" if "medium" in levels else
+            "industrial" if "industrial" in levels else
+            "unknown"
+        )
+
     groups.sort(
         key=lambda g: (
-            -_level_rank(g.get("max_alert_level", "unknown")),
+            -_level_rank(g.get("max_alert_level")),
             (getattr(g.get("main"), "character_name", "") or "").lower(),
         )
     )

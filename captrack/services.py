@@ -10,59 +10,69 @@ from allianceauth.authentication.models import CharacterOwnership
 
 from .models import CapWatchlist
 
-# NOTE:
-# Group IDs cover T1 + faction variants within the same group.
+# Capital ship group IDs (T1 + faction variants live in same groups)
 CAPITAL_GROUP_IDS: List[int] = [
-    30,    # Titans (includes faction titans)
-    659,   # Supercarriers 
-    1972,  # Lancer Dreadnoughts
-    485,   # Dreadnaughts
-    1538,  # Force Auxiliaries
+    30,    # Titans
+    659,   # Supercarriers
     547,   # Carriers
+    485,   # Dreadnoughts
+    1972,  # Lancer Dreadnoughts
+    1538,  # Force Auxiliaries
     883,   # Capital Industrial Ships (Rorqual)
 ]
 
 
+# ------------------------------------------------------------------
+# Classification helpers
+# ------------------------------------------------------------------
+def _cap_class_for_group_id(group_id: Optional[int]) -> str:
+    """
+    Returns a normalized capital class string for policy logic.
+    """
+    if group_id in (30, 659):
+        return "supercapital"
+    if group_id in (485, 1972):
+        return "dreadnought"
+    if group_id == 547:
+        return "carrier"
+    if group_id == 1538:
+        return "fax"
+    if group_id == 883:
+        return "industrial"
+    return "unknown"
+
+
 def _risk_level_for_group_id(group_id: Optional[int]) -> str:
     """
-    Alert classification policy:
+    Severity classification (UI + alert styling).
 
     - critical: Titans, Supercarriers
     - high: Dreadnoughts, Lancer Dreadnoughts
     - medium: Carriers, Force Auxiliaries
-    - industrial: Capital Industrial Ships (Rorqual)
+    - industrial: Capital Industrials
     """
-    if group_id in (30, 659):          # Titans, Supercarriers
+    if group_id in (30, 659):
         return "critical"
-    if group_id in (485, 1972):        # Dreadnoughts, Lancer Dreads
+    if group_id in (485, 1972):
         return "high"
-    if group_id in (547, 1538):        # Carriers, FAX
+    if group_id in (547, 1538):
         return "medium"
-    if group_id == 883:                # Rorqual
+    if group_id == 883:
         return "industrial"
     return "unknown"
 
 
 def _should_alert(alert_level: str) -> bool:
     """
-    Whether this capital should generate alerts.
-
-    Industrial ships are tracked but do not alert by default.
+    Default alertability (overridden later by policy logic).
     """
     return alert_level in {"critical", "high", "medium"}
 
 
+# ------------------------------------------------------------------
+# Public service functions
+# ------------------------------------------------------------------
 def get_capitals_in_blacklisted_regions(blacklisted_regions):
-    """
-    Returns a flat list of dicts containing:
-    - CharacterOwnership object (ownership)
-    - Character ID + name
-    - Ship type name, type ID, group ID
-    - Alert level + should_alert
-    - Region/system + IDs
-    - Structure/station name
-    - Human breadcrumb "Region → System"
-    """
     region_ids = [r.id for r in blacklisted_regions]
 
     assets = (
@@ -81,12 +91,13 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
     )
 
     filtered_assets: List[CharacterAsset] = []
-    for a in assets:
-        if not a.location_name or not a.location_name.system:
+    for asset in assets:
+        if not asset.location_name or not asset.location_name.system:
             continue
-        region = a.location_name.system.constellation.region
+
+        region = asset.location_name.system.constellation.region
         if region and region.region_id in region_ids:
-            filtered_assets.append(a)
+            filtered_assets.append(asset)
 
     output: List[Dict[str, Any]] = []
 
@@ -100,20 +111,17 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         except CharacterOwnership.DoesNotExist:
             continue
 
+        ship_group_id = getattr(asset.type_name.group, "group_id", None)
         ship_type_id = (
             getattr(asset.type_name, "eve_type_id", None)
             or getattr(asset.type_name, "type_id", None)
         )
-        ship_group_id = getattr(asset.type_name.group, "group_id", None)
 
         alert_level = _risk_level_for_group_id(ship_group_id)
+        cap_class = _cap_class_for_group_id(ship_group_id)
 
         system_obj = asset.location_name.system
-        region_obj = (
-            system_obj.constellation.region
-            if system_obj and system_obj.constellation
-            else None
-        )
+        region_obj = system_obj.constellation.region if system_obj else None
 
         system_name = getattr(system_obj, "name", "(Unknown)")
         system_id = getattr(system_obj, "system_id", None)
@@ -132,8 +140,9 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
             "ship_type": asset.type_name.name,
             "ship_type_id": ship_type_id,
             "ship_group_id": ship_group_id,
-            "risk": alert_level,            # backward compat
-            "alert_level": alert_level,     # explicit
+            "cap_class": cap_class,               # 👈 NEW
+            "risk": alert_level,                  # backward compat
+            "alert_level": alert_level,
             "should_alert": _should_alert(alert_level),
             "region": region_name,
             "region_id": region_id,
