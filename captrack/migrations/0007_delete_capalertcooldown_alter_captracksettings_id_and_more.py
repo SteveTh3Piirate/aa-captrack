@@ -10,8 +10,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Be resilient across environments: the old table may not exist
-        # (e.g. after faked/partial migrations or fresh installs).
+        # Make this resilient across environments:
+        # Some DBs (especially after faked/partial migrations) won't have these tables.
         migrations.SeparateDatabaseAndState(
             database_operations=[
                 migrations.RunSQL(
@@ -45,7 +45,17 @@ class Migration(migrations.Migration):
                 verbose_name="ID",
             ),
         ),
-        migrations.DeleteModel(
-            name="CapWatchlist",
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunSQL(
+                    sql="DROP TABLE IF EXISTS captrack_capwatchlist;",
+                    reverse_sql=migrations.RunSQL.noop,
+                ),
+            ],
+            state_operations=[
+                migrations.DeleteModel(
+                    name="CapWatchlist",
+                ),
+            ],
         ),
     ]
