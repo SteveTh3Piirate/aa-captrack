@@ -55,11 +55,15 @@ def scan_capitals_and_send_alerts():
     if not settings_obj or not settings_obj.webhook_url:
         return
 
-    cooldown_minutes = getattr(settings, "CAPTRACK_ALERT_COOLDOWN_MINUTES", DEFAULT_COOLDOWN_MINUTES)
+    cooldown_minutes = getattr(
+        settings, "CAPTRACK_ALERT_COOLDOWN_MINUTES", DEFAULT_COOLDOWN_MINUTES
+    )
     cooldown_delta = timedelta(minutes=cooldown_minutes)
 
     critical_repeat_minutes = getattr(
-        settings, "CAPTRACK_CRITICAL_MIN_REPEAT_MINUTES", DEFAULT_CRITICAL_MIN_REPEAT_MINUTES
+        settings,
+        "CAPTRACK_CRITICAL_MIN_REPEAT_MINUTES",
+        DEFAULT_CRITICAL_MIN_REPEAT_MINUTES,
     )
     critical_repeat_delta = timedelta(minutes=critical_repeat_minutes)
 
@@ -82,18 +86,22 @@ def scan_capitals_and_send_alerts():
             detected_ids.add(cid)
 
     # Ensure watchlist rows exist for detected ownerships; update last_seen
-    # (keeping it straightforward and safe)
+    # (single write per detected ownership)
     for r in results:
         ownership = r.get("ownership")
         if not ownership:
             continue
-        CapWatchlist.objects.get_or_create(character=ownership, defaults={"last_seen": now})
-        CapWatchlist.objects.filter(character=ownership).update(last_seen=now)
+
+        CapWatchlist.objects.update_or_create(
+            character=ownership,
+            defaults={"last_seen": now},
+        )
 
     # Load watchlist rows for quick snooze/cooldown checks
     watchlists = {
         wl.character_id: wl
-        for wl in CapWatchlist.objects.filter(character_id__in=ownership_ids).select_related("character")
+        for wl in CapWatchlist.objects.filter(character_id__in=ownership_ids)
+        .select_related("character")
     }
 
     dashboard_url = _safe_dashboard_url()
@@ -128,12 +136,14 @@ def scan_capitals_and_send_alerts():
             # Snooze always wins
             if wl.alert_snoozed_until and wl.alert_snoozed_until > now:
                 until = wl.alert_snoozed_until.strftime("%Y-%m-%d %H:%M")
-                snoozed_lines.append(f"**{e.get('character_name','Unknown')}** until {until} (UTC)")
+                snoozed_lines.append(
+                    f"**{e.get('character_name', 'Unknown')}** until {until} (UTC)"
+                )
                 continue
 
             # Cooldown rules
             if alert_level == "critical":
-                # spam guard only (still 'always alert' in the sense of no long cooldown)
+                # Spam guard only (still "always alert" in the sense of no long cooldown)
                 if wl.last_alert_sent and (now - wl.last_alert_sent) < critical_repeat_delta:
                     continue
             else:
@@ -151,7 +161,8 @@ def scan_capitals_and_send_alerts():
         main_name = getattr(main, "character_name", str(main))
 
         status_line = (
-            f"Consolidated alert • cooldown {cooldown_minutes}m • critical min repeat {critical_repeat_minutes}m"
+            f"Consolidated alert • cooldown {cooldown_minutes}m • "
+            f"critical min repeat {critical_repeat_minutes}m"
         )
 
         embed = build_captrack_main_embed(
@@ -166,7 +177,9 @@ def scan_capitals_and_send_alerts():
         sent = send_discord_webhook(settings_obj.webhook_url, embeds=[embed])
         if sent:
             # Update last_alert_sent only for entries that were eligible this run
-            CapWatchlist.objects.filter(pk__in=list(eligible_watchlists.keys())).update(last_alert_sent=now)
+            CapWatchlist.objects.filter(pk__in=list(eligible_watchlists.keys())).update(
+                last_alert_sent=now
+            )
 
     # Cleanup watchlist entries no longer detected
     to_remove: list[int] = []

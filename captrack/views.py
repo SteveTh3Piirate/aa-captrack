@@ -10,7 +10,20 @@ from .services import get_capitals_in_blacklisted_regions, group_capitals_by_mai
 
 
 def _level_rank(level: str) -> int:
-    return {"critical": 4, "high": 3, "medium": 2, "industrial": 1, "unknown": 0}.get(level or "unknown", 0)
+    """
+    Higher number = more severe.
+    Ordering requested:
+      CRITICAL > HIGH > MEDIUM > LOW > INDUSTRIAL > UNKNOWN
+    """
+    return {
+        "critical": 5,
+        "high": 4,
+        "medium": 3,
+        "low": 2,
+        "industrial": 1,
+        "unknown": 0,
+        None: 0,
+    }.get((level or "unknown").lower(), 0)
 
 
 @login_required
@@ -78,6 +91,18 @@ def dashboard(request):
 
     for group in groups:
         entries = group.get("alts", [])
+
+        # Sort rows within each main by severity (highest first),
+        # then by character name for stable ordering.
+        entries.sort(
+            key=lambda e: (
+                -_level_rank(e.get("alert_level") or e.get("risk") or "unknown"),
+                (e.get("character_name") or "").lower(),
+            )
+        )
+        group["alts"] = entries
+
+        # Group max severity badge
         levels = {e.get("alert_level") for e in entries}
         if "critical" in levels:
             group["max_alert_level"] = "critical"
@@ -85,6 +110,8 @@ def dashboard(request):
             group["max_alert_level"] = "high"
         elif "medium" in levels:
             group["max_alert_level"] = "medium"
+        elif "low" in levels:
+            group["max_alert_level"] = "low"
         elif "industrial" in levels:
             group["max_alert_level"] = "industrial"
         else:
@@ -93,7 +120,7 @@ def dashboard(request):
         group["total_capitals"] = len(entries)
         group["alerting_capitals"] = sum(1 for e in entries if e.get("should_alert"))
 
-    # Sort: highest severity first, then by main name for stability
+    # Sort groups (mains) by max severity, then name
     groups.sort(
         key=lambda g: (
             -_level_rank(g.get("max_alert_level", "unknown")),
