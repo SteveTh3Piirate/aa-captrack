@@ -1,6 +1,7 @@
 LICENSE
 MANIFEST.in
 README.md
+pyproject.toml
 setup.py
 aa_captrack.egg-info/PKG-INFO
 aa_captrack.egg-info/SOURCES.txt
@@ -19,11 +20,23 @@ captrack/tasks.py
 captrack/urls.py
 captrack/views.py
 captrack/migrations/0001_initial.py
+captrack/migrations/0002_alter_captracksettings_options.py
+captrack/migrations/0003_alter_captracksettings_options.py
+captrack/migrations/0004_update_basic_access_permission_name.py
+captrack/migrations/0005_capwatchlist_alert_snoozed_until_and_more.py
 captrack/migrations/__init__.py
+captrack/templates/captrack/dashboard .bak
 captrack/templates/captrack/dashboard.html
 captrack/utils/__init__.py
 captrack/utils/discord.py
+images/admin-settings.jpg
+images/admin.jpg
+images/collapsed.jpg
+images/discord-critical.jpg
+images/overview.jpg
+images/snoozed.jpg
 testproj/__init__.py
+testproj/apps.py
 testproj/manage.py
 testproj/models-mock.py
 testproj/settings.py
