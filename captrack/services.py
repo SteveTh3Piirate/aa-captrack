@@ -7,9 +7,10 @@ CAPITAL_GROUP_IDS = [
     30,    # Titans (includes faction titans)
     485,   # Supercarriers
     547,   # Carriers
-    659,   # Dreadnoughts
+    659,   # Dreadnoughts (includes faction dreads)
     1972,  # Lancer Dreadnoughts
     1538,  # Force Auxiliaries
+    883,   # Capital Industrial Ships (Rorqual)
 ]
 
 
