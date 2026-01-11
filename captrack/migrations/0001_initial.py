@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('authentication', '__first__'),
-        ('mock_eveuniverse', '__first__'),
+        ('eveuniverse', '__first__'),
     ]
 
     operations = [
@@ -45,7 +45,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(primary_key=True, serialize=False)),
                 ('webhook_url', models.URLField(blank=True, help_text='Discord webhook URL for cap notifications.', null=True)),
-                ('blacklisted_regions', models.ManyToManyField(blank=True, help_text='Select regions to blacklist for capital tracking.', to='mock_eveuniverse.everegion')),
+                ('blacklisted_regions', models.ManyToManyField(blank=True, help_text='Select regions to blacklist for capital tracking.', to='eveuniverse.everegion')),
             ],
             options={
                 'verbose_name': 'CapTrack settings',
