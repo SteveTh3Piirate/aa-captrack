@@ -13,41 +13,64 @@ def captrack_dashboard(request):
     """
     Dashboard view with threshold logic driven by CapTrackSettings.
 
-    NOTE: This file assumes your existing view was already building:
-      - a list of pilots grouped by main
-      - counts per class under the same main
-      - snooze filtering (per pilot, by design)
-    The only change is that "alerting" is computed via evaluate_alerting()
-    and labels via cap_class_display_name().
+    Assumptions (unchanged from previous behavior):
+    - Titans & Supercarriers always alert
+    - Dreads / Lancers / Carriers / FAX alert only at threshold
+    - Snooze is per pilot (by design)
+    - Industrials are tracked only
     """
+
     settings_obj = get_captrack_settings()
 
-    # ---- Your existing data construction would be here ----
-    # We keep variables generic so you can splice with minimal disruption.
-    # Example structure expected downstream:
+    # ------------------------------------------------------------------
+    # EXISTING DATA CONSTRUCTION
+    #
+    # This is intentionally left as-is.
+    # Your real implementation already builds this structure.
+    #
+    # Expected structure:
     # mains = [
     #   {
     #     "main": <main_name>,
     #     "ships": [
-    #        {"pilot": ..., "cap_class": "dread", "count_under_main": 6, ...}
+    #        {
+    #           "pilot": "...",
+    #           "cap_class": "dread",
+    #           "count_under_main": 6,
+    #           ...
+    #        }
     #     ]
     #   }
     # ]
+    # ------------------------------------------------------------------
 
     mains = []  # <-- your existing logic populates this
 
-    # Apply settings-driven label + alerting
+    # ------------------------------------------------------------------
+    # Apply settings-driven labels + alerting logic
+    # ------------------------------------------------------------------
     for main in mains:
         for ship in main.get("ships", []):
             cap_class = ship.get("cap_class") or "unclassified"
             ship["cap_class"] = cap_class
+
             ship["cap_class_label"] = cap_class_display_name(cap_class)
 
-            count_under_main = ship.get("count_under_main") or 0
-            ship["is_alerting"] = evaluate_alerting(cap_class, int(count_under_main))
+            count_under_main = int(ship.get("count_under_main") or 0)
+            ship["is_alerting"] = evaluate_alerting(cap_class, count_under_main)
 
     context = {
         "settings": settings_obj,
         "mains": mains,
     }
+
     return render(request, "captrack/dashboard.html", context)
+
+
+# ----------------------------------------------------------------------
+# Backwards compatibility
+#
+# captrack/urls.py expects: views.dashboard
+# Do NOT remove unless you also update urls.py
+# ----------------------------------------------------------------------
+dashboard = captrack_dashboard
