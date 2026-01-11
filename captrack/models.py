@@ -43,7 +43,7 @@ class CapTrackSettings(models.Model):
             raise ValidationError("Webhook URL is not set.")
 
         payload = {"content": "CapTrack test webhook successful."}
-        response = requests.post(self.webhook_url, json=payload)
+        response = requests.post(self.webhook_url, json=payload, timeout=5)
 
         if response.status_code >= 400:
             raise ValidationError(
@@ -84,9 +84,28 @@ class CapWatchlist(models.Model):
         help_text="When this character was first detected with a capital in a blacklisted region."
     )
 
+    # Controlled by refresh logic (services/tasks), not auto-updated by model saves
     last_seen = models.DateTimeField(
-        auto_now=True,
+        null=True,
+        blank=True,
+        db_index=True,
         help_text="When this character was last confirmed with a capital in a blacklisted region."
+    )
+
+    # When we last sent an alert for this watch entry
+    last_alert_sent = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="When an alert was last sent for this watchlist entry."
+    )
+
+    # Allow ops to snooze alerts until a certain time
+    alert_snoozed_until = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="If set, alerts are suppressed until this time."
     )
 
     class Meta:

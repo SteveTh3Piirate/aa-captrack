@@ -1,114 +1,175 @@
 ﻿from datetime import timedelta
-from django.utils import timezone
+
 from celery import shared_task
+from django.conf import settings
+from django.urls import reverse
+from django.utils import timezone
 
-from .models import CapTrackSettings, CapAlertCooldown, CapWatchlist
-from .services import get_capitals_in_blacklisted_regions
-from .utils.discord import build_captrack_embed, send_discord_webhook
+from .models import CapTrackSettings, CapWatchlist
+from .services import get_capitals_in_blacklisted_regions, group_capitals_by_main
+from .utils.discord import build_captrack_main_embed, send_discord_webhook
 
 
-COOLDOWN_MINUTES = 360  # minutes
+DEFAULT_COOLDOWN_MINUTES = 360
+DEFAULT_CRITICAL_MIN_REPEAT_MINUTES = 15
 
 
 def _get_character_id_from_ownership(ownership) -> int | None:
-    """
-    Best-effort resolver for character_id across AA model shapes.
-    """
-    # Common: ownership.character.character_id
     ch = getattr(ownership, "character", None)
     if ch is not None:
         cid = getattr(ch, "character_id", None)
         if cid:
             return cid
-        # Sometimes ownership.character is a wrapper with .character.character_id
         inner = getattr(ch, "character", None)
         if inner is not None:
-            cid2 = getattr(inner, "character_id", None)
-            if cid2:
-                return cid2
+            return getattr(inner, "character_id", None)
     return None
 
 
-def _get_character_name_from_ownership(ownership) -> str:
-    ch = getattr(ownership, "character", None)
-    if ch is not None:
-        name = getattr(ch, "character_name", None)
-        if name:
-            return name
-        inner = getattr(ch, "character", None)
-        if inner is not None:
-            name2 = getattr(inner, "character_name", None)
-            if name2:
-                return name2
-    return str(ownership)
+def _safe_dashboard_url() -> str | None:
+    base = getattr(settings, "SITE_URL", "") or ""
+    if not base:
+        return None
+    try:
+        path = reverse("captrack:dashboard")
+    except Exception:
+        return None
+    return base.rstrip("/") + path
 
 
-# ------------------------------------------------------------
-#  MAIN SCANNER
-# ------------------------------------------------------------
 @shared_task
 def scan_capitals_and_send_alerts():
     """
     Scheduled task:
-    - Scans for capitals in blacklisted regions
-    - Sends Discord alerts (with cooldown)
-    - Maintains the CapWatchlist (add/remove characters)
+    - Scans for capitals in blacklisted regions (service output includes alert_level + should_alert)
+    - Updates watchlist last_seen
+    - Sends consolidated Discord alerts (one embed per main)
+
+    Rules:
+    - Snooze always suppresses alerts
+    - Industrial is tracked but does not alert (services: should_alert=False)
+    - Critical ignores normal cooldown but has a minimum repeat interval (spam guard)
+    - High/Medium use normal cooldown
     """
-    settings = CapTrackSettings.objects.first()
-    if not settings or not settings.webhook_url:
+    settings_obj = CapTrackSettings.objects.first()
+    if not settings_obj or not settings_obj.webhook_url:
         return
 
-    blacklisted = settings.blacklisted_regions.all()
-    entries = get_capitals_in_blacklisted_regions(blacklisted)
+    cooldown_minutes = getattr(settings, "CAPTRACK_ALERT_COOLDOWN_MINUTES", DEFAULT_COOLDOWN_MINUTES)
+    cooldown_delta = timedelta(minutes=cooldown_minutes)
 
+    critical_repeat_minutes = getattr(
+        settings, "CAPTRACK_CRITICAL_MIN_REPEAT_MINUTES", DEFAULT_CRITICAL_MIN_REPEAT_MINUTES
+    )
+    critical_repeat_delta = timedelta(minutes=critical_repeat_minutes)
+
+    blacklisted = settings_obj.blacklisted_regions.all()
+    results = get_capitals_in_blacklisted_regions(blacklisted)
     now = timezone.now()
 
-    # Track which characters are currently detected
-    detected_ids = set()
+    # Track which character IDs are currently detected (for cleanup)
+    detected_ids: set[int] = set()
+    ownership_ids: set[int] = set()
 
-    for entry in entries:
-        ownership = entry["ownership"]
-        char_id = _get_character_id_from_ownership(ownership)
-        char_name = _get_character_name_from_ownership(ownership)
+    for r in results:
+        ownership = r.get("ownership")
+        if not ownership:
+            continue
+        ownership_ids.add(ownership.pk)
 
-        if not char_id:
+        cid = r.get("character_id") or _get_character_id_from_ownership(ownership)
+        if cid:
+            detected_ids.add(cid)
+
+    # Ensure watchlist rows exist for detected ownerships; update last_seen
+    # (keeping it straightforward and safe)
+    for r in results:
+        ownership = r.get("ownership")
+        if not ownership:
+            continue
+        CapWatchlist.objects.get_or_create(character=ownership, defaults={"last_seen": now})
+        CapWatchlist.objects.filter(character=ownership).update(last_seen=now)
+
+    # Load watchlist rows for quick snooze/cooldown checks
+    watchlists = {
+        wl.character_id: wl
+        for wl in CapWatchlist.objects.filter(character_id__in=ownership_ids).select_related("character")
+    }
+
+    dashboard_url = _safe_dashboard_url()
+
+    # Consolidate by main
+    groups = group_capitals_by_main(results)
+
+    for group in groups:
+        main = group.get("main")
+        entries = group.get("alts") or []
+        if not main or not entries:
             continue
 
-        detected_ids.add(char_id)
+        # Determine which entries should trigger an alert this run
+        eligible_watchlists: dict[int, CapWatchlist] = {}
+        snoozed_lines: list[str] = []
 
-        # Maintain watchlist
-        CapWatchlist.objects.get_or_create(character=ownership)
+        for e in entries:
+            ownership = e.get("ownership")
+            if not ownership:
+                continue
 
-        # Cooldown check
-        cooldown, _ = CapAlertCooldown.objects.get_or_create(
-            character_id=char_id,
-            defaults={"last_alert": now - timedelta(hours=1)},
-        )
+            wl = watchlists.get(ownership.pk)
+            if not wl:
+                continue
 
-        if cooldown.last_alert > now - timedelta(minutes=COOLDOWN_MINUTES):
+            alert_level = e.get("alert_level") or e.get("risk") or "unknown"
+            should_alert = bool(e.get("should_alert", False))
+            if not should_alert:
+                continue
+
+            # Snooze always wins
+            if wl.alert_snoozed_until and wl.alert_snoozed_until > now:
+                until = wl.alert_snoozed_until.strftime("%Y-%m-%d %H:%M")
+                snoozed_lines.append(f"**{e.get('character_name','Unknown')}** until {until} (UTC)")
+                continue
+
+            # Cooldown rules
+            if alert_level == "critical":
+                # spam guard only (still 'always alert' in the sense of no long cooldown)
+                if wl.last_alert_sent and (now - wl.last_alert_sent) < critical_repeat_delta:
+                    continue
+            else:
+                if wl.last_alert_sent and (now - wl.last_alert_sent) < cooldown_delta:
+                    continue
+
+            eligible_watchlists[wl.pk] = wl
+
+        if not eligible_watchlists:
             continue
 
-        # Build a nice embed w/ portrait + ship render (if type_id present)
-        embed = build_captrack_embed(
-            character_id=char_id,
-            character_name=char_name,
-            ship_type_name=entry["ship_type"],
-            ship_type_id=entry.get("ship_type_id"),
-            system_name=entry.get("system"),
-            structure_name=entry.get("structure"),
-            status_line=f"Detected • cooldown {COOLDOWN_MINUTES}m",
+        # Build consolidated embed (includes ALL entries for context)
+        # but still shows snoozed list separately
+        main_id = getattr(main, "character_id", None) or getattr(main, "pk", None) or 0
+        main_name = getattr(main, "character_name", str(main))
+
+        status_line = (
+            f"Consolidated alert • cooldown {cooldown_minutes}m • critical min repeat {critical_repeat_minutes}m"
         )
 
-        # Send
-        ok = send_discord_webhook(settings.webhook_url, embeds=[embed])
+        embed = build_captrack_main_embed(
+            main_character_id=int(main_id) if main_id else 0,
+            main_character_name=main_name,
+            entries=entries,
+            dashboard_url=dashboard_url,
+            snoozed_lines=snoozed_lines,
+            status_line=status_line,
+        )
 
-        if ok:
-            cooldown.last_alert = now
-            cooldown.save()
+        sent = send_discord_webhook(settings_obj.webhook_url, embeds=[embed])
+        if sent:
+            # Update last_alert_sent only for entries that were eligible this run
+            CapWatchlist.objects.filter(pk__in=list(eligible_watchlists.keys())).update(last_alert_sent=now)
 
-    # Cleanup watchlist: remove characters no longer detected
-    # (We need a safe way to compare ids from ownership)
-    to_remove = []
+    # Cleanup watchlist entries no longer detected
+    to_remove: list[int] = []
     for wl in CapWatchlist.objects.select_related("character").all():
         wl_char_id = _get_character_id_from_ownership(wl.character)
         if wl_char_id and wl_char_id not in detected_ids:
@@ -118,23 +179,17 @@ def scan_capitals_and_send_alerts():
         CapWatchlist.objects.filter(pk__in=to_remove).delete()
 
 
-# ------------------------------------------------------------
-#  TARGETED ASSET REFRESH
-# ------------------------------------------------------------
 @shared_task
 def refresh_watchlist_assets():
     """
-    Every 6 hours:
-    - Refresh assets ONLY for characters in the watchlist
-    - Uses CorpTools' update_subset_of_characters
+    Periodic task:
+    - Refresh assets only for characters currently on watchlist
     """
     from corptools.tasks import update_subset_of_characters
 
-    watchlist = CapWatchlist.objects.select_related("character").all()
-
-    char_ids = []
-    for entry in watchlist:
-        cid = _get_character_id_from_ownership(entry.character)
+    char_ids: list[int] = []
+    for wl in CapWatchlist.objects.select_related("character"):
+        cid = _get_character_id_from_ownership(wl.character)
         if cid:
             char_ids.append(cid)
 
