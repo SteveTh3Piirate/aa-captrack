@@ -91,6 +91,7 @@ def dashboard(request):
         entries = group.get("alts", [])
         counts = Counter(e.get("ship_group_id") for e in entries)
 
+        # Apply the "always alert" + "threshold alert" policy
         for e in entries:
             gid = e.get("ship_group_id")
 
@@ -101,6 +102,7 @@ def dashboard(request):
             else:
                 e["should_alert"] = False
 
+        # Sort within each main: severity -> Titan>Super priority -> name
         entries.sort(
             key=lambda e: (
                 -_level_rank(e.get("alert_level")),
@@ -112,13 +114,17 @@ def dashboard(request):
         group["alts"] = entries
         group["total_capitals"] = len(entries)
         group["alerting_capitals"] = sum(1 for e in entries if e.get("should_alert"))
+        group["is_alerting"] = group["alerting_capitals"] > 0
 
-        levels = {e.get("alert_level") for e in entries if e.get("should_alert")}
+        # IMPORTANT FIX:
+        # Badge should represent what's present, not only what is currently alerting.
+        all_levels = {e.get("alert_level") for e in entries if e.get("alert_level")}
         group["max_alert_level"] = (
-            "critical" if "critical" in levels else
-            "high" if "high" in levels else
-            "medium" if "medium" in levels else
-            "industrial" if "industrial" in levels else
+            "critical" if "critical" in all_levels else
+            "high" if "high" in all_levels else
+            "medium" if "medium" in all_levels else
+            "low" if "low" in all_levels else
+            "industrial" if "industrial" in all_levels else
             "unknown"
         )
 
