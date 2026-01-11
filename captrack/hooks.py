@@ -6,7 +6,7 @@ class CapTrackMenu(MenuItemHook):
     def __init__(self):
         super().__init__(
             _("CapTrack"),
-            "fa satellite-dish",
+            "fas fa-satellite-dish",
             "captrack:dashboard",
             navactive=["captrack:"],
             order=200,
