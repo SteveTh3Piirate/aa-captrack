@@ -141,7 +141,7 @@ Only **one settings row** is expected.
 
 ### Dashboard — Overview
 
-![Dashboard Overview](https://raw.githubusercontent.com/SteveTh3Piirate/aa-captrack/main/images/overview.jpg)
+![Dashboard Overview](https://raw.githubusercontent.com/SteveTh3Piirate/aa-captrack/images/overview.jpg)
 
 Displays all tracked capital activity grouped by main character, with clear visual separation between critical, alerting, and informational states.
 
@@ -149,7 +149,7 @@ Displays all tracked capital activity grouped by main character, with clear visu
 
 ### Dashboard — Collapsed / Expanded States
 
-![Dashboard Collapsed](https://raw.githubusercontent.com/SteveTh3Piirate/aa-captrack/main/images/collapsed.jpg)
+![Dashboard Collapsed](https://raw.githubusercontent.com/SteveTh3Piirate/aa-captrack/images/collapsed.jpg)
 
 Cards can be collapsed to reduce noise. Collapse state can optionally be remembered per user.
 
@@ -157,7 +157,7 @@ Cards can be collapsed to reduce noise. Collapse state can optionally be remembe
 
 ### Dashboard — Snoozed Pilots
 
-![Dashboard Snoozed](https://raw.githubusercontent.com/SteveTh3Piirate/aa-captrack/main/images/snoozed.jpg)
+![Dashboard Snoozed](https://raw.githubusercontent.com/SteveTh3Piirate/aa-captrack/images/snoozed.jpg)
 
 Pilots can be snoozed individually to suppress alerts and notifications for a configurable duration.
 
@@ -165,7 +165,7 @@ Pilots can be snoozed individually to suppress alerts and notifications for a co
 
 ### Admin — CapTrack Settings
 
-![Admin Settings](https://raw.githubusercontent.com/SteveTh3Piirate/aa-captrack/main/images/admin-settings.jpg)
+![Admin Settings](https://raw.githubusercontent.com/SteveTh3Piirate/aa-captrack/images/admin-settings.jpg)
 
 All configuration is managed through a single settings entry in the AllianceAuth admin panel.
 
@@ -173,7 +173,7 @@ All configuration is managed through a single settings entry in the AllianceAuth
 
 ### Discord — Critical Alert Example
 
-![Discord Critical Alert](https://raw.githubusercontent.com/SteveTh3Piirate/aa-captrack/main/images/discord-critical.jpg)
+![Discord Critical Alert](https://raw.githubusercontent.com/SteveTh3Piirate/aa-captrack/images/discord-critical.jpg)
 
 Critical alerts (Titans, Supercarriers) are always sent immediately.
 
