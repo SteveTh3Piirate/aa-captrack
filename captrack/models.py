@@ -28,6 +28,9 @@ class CapTrackSettings(models.Model):
     class Meta:
         verbose_name = "CapTrack settings"
         verbose_name_plural = "CapTrack settings"
+        permissions = (
+            ("basic_access", "Can access CapTrack"),
+        )
 
     def __str__(self):
         return "CapTrack Settings"
@@ -91,5 +94,5 @@ class CapWatchlist(models.Model):
         verbose_name_plural = "CapTrack watchlist"
 
     def __str__(self):
-        name = getattr(self.character.character, "character_name", self.character.pk)
+        name = getattr(getattr(self.character, "character", None), "character_name", self.character.pk)
         return f"Watchlist: {name}"

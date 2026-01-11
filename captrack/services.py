@@ -1,9 +1,7 @@
 from collections import defaultdict
 
 from corptools.models.assets import CharacterAsset
-from eveuniverse.models import EveRegion
 from allianceauth.authentication.models import CharacterOwnership
-
 
 CAPITAL_GROUP_IDS = [30, 485, 547, 659, 1538]
 
@@ -12,11 +10,11 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
     """
     Returns a flat list of dicts containing:
     - CharacterOwnership object
-    - Ship type
+    - Ship type name
+    - Ship type ID (for Discord images)
     - System name
     - Structure/station name
     """
-
     region_ids = [r.id for r in blacklisted_regions]
 
     assets = (
@@ -34,16 +32,20 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         .filter(type_name__group__group_id__in=CAPITAL_GROUP_IDS)
     )
 
-    assets = [
-        a for a in assets
-        if a.location_name
-        and a.location_name.system
-        and a.location_name.system.constellation.region.region_id in region_ids
-    ]
+    # Keep only assets that resolve to a region and are in the blacklist
+    filtered_assets = []
+    for a in assets:
+        if not a.location_name or not a.location_name.system:
+            continue
+        region = a.location_name.system.constellation.region
+        if region and region.region_id in region_ids:
+            filtered_assets.append(a)
 
     output = []
 
-    for asset in assets:
+    for asset in filtered_assets:
+        # corptools CharacterAsset links: asset.character -> CharacterOwnership-ish wrapper,
+        # but we follow your existing chain:
         char_id = asset.character.character.character_id
 
         try:
@@ -51,9 +53,17 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         except CharacterOwnership.DoesNotExist:
             continue
 
+        # Try to extract eve type id for ship image
+        ship_type_id = None
+        try:
+            ship_type_id = getattr(asset.type_name, "eve_type_id", None) or getattr(asset.type_name, "type_id", None)
+        except Exception:
+            ship_type_id = None
+
         output.append({
             "ownership": ownership,
             "ship_type": asset.type_name.name,
+            "ship_type_id": ship_type_id,
             "system": asset.location_name.system.name,
             "structure": asset.location_name.location_name or "(Unknown)",
         })
@@ -74,7 +84,6 @@ def group_capitals_by_main(entries):
         ownership = entry["ownership"]
         user = ownership.user
 
-        # Determine main character
         main = getattr(user.profile, "main_character", None)
         if not main:
             main = ownership.character
@@ -83,7 +92,6 @@ def group_capitals_by_main(entries):
             continue
 
         key = main.character_id
-
         grouped[key]["main"] = main
         grouped[key]["alts"].append(entry)
 
