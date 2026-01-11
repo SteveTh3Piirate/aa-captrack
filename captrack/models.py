@@ -26,10 +26,10 @@ class CapTrackSettings(models.Model):
     )
 
     class Meta:
-        verbose_name = "CapTrack settings"
-        verbose_name_plural = "CapTrack settings"
+        verbose_name = "CapTrack"
+        verbose_name_plural = "CapTrack Dashboard"
         permissions = (
-            ("basic_access", "Can access CapTrack"),
+            ("basic_access", "Can View Dashboard"),
         )
 
     def __str__(self):
