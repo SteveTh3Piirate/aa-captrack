@@ -28,6 +28,17 @@
                 cursor: pointer;
             }
 
+            /* Chevron animation */
+            .captrack-card-header .chevron {
+                display: inline-block;
+                transition: transform 0.2s ease;
+                transform-origin: center;
+            }
+
+            .captrack-card-header button[aria-expanded="true"] .chevron {
+                transform: rotate(90deg);
+            }
+
         .captrack-table-dark {
             background-color: #181818;
             color: #ccc;
@@ -124,16 +135,9 @@
 
     {% for group in groups %}
     {% if group.main %}
-    {% with collapse_id="captrack-collapse-"|add:forloop.counter|stringformat:"s" %}
-    {# NOTE: the with/stringformat can be finicky in some setups; we also hardcode below with forloop.counter #}
-    {% endwith %}
 
     <div class="card mt-4" style="background-color:#111; border:1px solid #3A3F44; border-radius:0.5rem;">
 
-        {% comment %}
-        Use explicit IDs (no reliance on with/add/stringformat), so target always matches.
-        {% endcomment %}
-        {% with cid="captrack-collapse-"|add:forloop.counter|stringformat:"s" %}
         <div class="captrack-card-header">
             <button type="button"
                     data-bs-toggle="collapse"
@@ -151,12 +155,13 @@
                     <span class="alert-badge alert-{{ group.max_alert_level|default:'unknown' }} me-2">
                         {{ group.max_alert_level|default:"unknown" }}
                     </span>
-                    <span class="text-muted">▾</span>
+                    <span class="chevron text-muted">▸</span>
                 </span>
             </button>
         </div>
 
-        <div id="captrack-collapse-{{ forloop.counter }}" class="collapse {% if group.max_alert_level == 'critical' %}show{% endif %}">
+        <div id="captrack-collapse-{{ forloop.counter }}"
+             class="collapse {% if group.max_alert_level == 'critical' %}show{% endif %}">
             <div class="card-body" style="background-color:#181818; border-radius:0 0 0.5rem 0.5rem;">
 
                 {% if group.alts %}
@@ -217,7 +222,7 @@
 
             </div>
         </div>
-        {% endwith %}
+
     </div>
 
     {% endif %}
@@ -230,36 +235,29 @@
 {{ block.super }}
 
 <script>
-/**
- * Fallback collapse toggler:
- * If Bootstrap's Collapse JS isn't loaded on this page, this will still make
- * data-bs-toggle="collapse" work by toggling the "show" class.
- *
- * If Bootstrap IS loaded, we do nothing and let Bootstrap handle it.
- */
-(function () {
-  const hasBootstrapCollapse =
-    typeof window.bootstrap !== "undefined" &&
-    typeof window.bootstrap.Collapse !== "undefined";
+    (function () {
+        const hasBootstrapCollapse =
+            typeof window.bootstrap !== "undefined" &&
+            typeof window.bootstrap.Collapse !== "undefined";
 
-  if (hasBootstrapCollapse) return;
+        if (hasBootstrapCollapse) return;
 
-  document.addEventListener("click", function (evt) {
-    const btn = evt.target.closest('[data-bs-toggle="collapse"]');
-    if (!btn) return;
+        document.addEventListener("click", function (evt) {
+            const btn = evt.target.closest('[data-bs-toggle="collapse"]');
+            if (!btn) return;
 
-    const targetSel = btn.getAttribute("data-bs-target");
-    if (!targetSel) return;
+            const targetSel = btn.getAttribute("data-bs-target");
+            if (!targetSel) return;
 
-    const target = document.querySelector(targetSel);
-    if (!target) return;
+            const target = document.querySelector(targetSel);
+            if (!target) return;
 
-    evt.preventDefault();
+            evt.preventDefault();
 
-    const isShown = target.classList.contains("show");
-    target.classList.toggle("show", !isShown);
-    btn.setAttribute("aria-expanded", (!isShown).toString());
-  });
-})();
+            const isShown = target.classList.contains("show");
+            target.classList.toggle("show", !isShown);
+            btn.setAttribute("aria-expanded", (!isShown).toString());
+        });
+    })();
 </script>
 {% endblock %}
