@@ -1,6 +1,6 @@
 ﻿# aa-captrack
 
-AllianceAuth plugin for tracking and alerting on capital ship activity
+AllianceAuth plugin for tracking and alerting on capital ship activity within your corporation or alliance.
 
 Version: **v1.0.0**  
 Status: **Stable Baseline**
