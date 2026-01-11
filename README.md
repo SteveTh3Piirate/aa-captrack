@@ -173,7 +173,7 @@ All configuration is managed through a single settings entry in the AllianceAuth
 
 ### Discord — Critical Alert Example
 
-![Discord Critical Alert](docs/screenshots/discord-critical.jpg)
+![Discord Critical Alert](images/discord-critical.jpg)
 
 Critical alerts (Titans, Supercarriers) are always sent immediately.
 
