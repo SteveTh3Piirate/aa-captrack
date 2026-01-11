@@ -14,11 +14,11 @@ from .models import CapWatchlist
 # Group IDs cover T1 + faction variants within the same group.
 CAPITAL_GROUP_IDS: List[int] = [
     30,    # Titans (includes faction titans)
-    485,   # Supercarriers
-    547,   # Carriers
-    659,   # Dreadnoughts (includes faction dreads)
+    659,   # Supercarriers (includes faction dreads)
     1972,  # Lancer Dreadnoughts
+    485,   # Dreadnaughts
     1538,  # Force Auxiliaries
+    547,   # Carriers
     883,   # Capital Industrial Ships (Rorqual)
 ]
 
@@ -32,9 +32,9 @@ def _risk_level_for_group_id(group_id: Optional[int]) -> str:
     - medium: Carriers, Force Auxiliaries
     - industrial: Capital Industrial Ships (Rorqual)
     """
-    if group_id in (30, 485):          # Titans, Supercarriers
+    if group_id in (30, 659):          # Titans, Supercarriers
         return "critical"
-    if group_id in (659, 1972):        # Dreadnoughts, Lancer Dreads
+    if group_id in (485, 1972):        # Dreadnoughts, Lancer Dreads
         return "high"
     if group_id in (547, 1538):        # Carriers, FAX
         return "medium"
