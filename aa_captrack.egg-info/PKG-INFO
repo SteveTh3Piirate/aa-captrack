@@ -2,8 +2,11 @@ Metadata-Version: 2.4
 Name: aa-captrack
 Version: 1.0.0
 Summary: Capital ship movement early warning plugin for AllianceAuth
+Home-page: https://github.com/SteveTh3Piirate/aa-captrack
 Author: Stephen Swindlehurst
 License: MIT
+Project-URL: Source, https://github.com/SteveTh3Piirate/aa-captrack
+Project-URL: Issues, https://github.com/SteveTh3Piirate/aa-captrack/issues
 Classifier: Framework :: Django
 Classifier: Framework :: Django :: 4.2
 Classifier: License :: OSI Approved :: MIT License
@@ -21,8 +24,10 @@ Dynamic: author
 Dynamic: classifier
 Dynamic: description
 Dynamic: description-content-type
+Dynamic: home-page
 Dynamic: license
 Dynamic: license-file
+Dynamic: project-url
 Dynamic: requires-dist
 Dynamic: requires-python
 Dynamic: summary
@@ -170,7 +175,7 @@ Only **one settings row** is expected.
 
 ### Dashboard — Overview
 
-![Dashboard Overview](images/overview.jpg)
+![Dashboard Overview](https://raw.githubusercontent.com/SteveTh3Piirate/aa-captrack/refs/heads/master/images/overview.jpg)
 
 Displays all tracked capital activity grouped by main character, with clear visual separation between critical, alerting, and informational states.
 
@@ -178,7 +183,7 @@ Displays all tracked capital activity grouped by main character, with clear visu
 
 ### Dashboard — Collapsed / Expanded States
 
-![Dashboard Collapsed](images/collapsed.jpg)
+![Dashboard Collapsed](https://raw.githubusercontent.com/SteveTh3Piirate/aa-captrack/refs/heads/master/images/collapsed.jpg)
 
 Cards can be collapsed to reduce noise. Collapse state can optionally be remembered per user.
 
@@ -186,7 +191,7 @@ Cards can be collapsed to reduce noise. Collapse state can optionally be remembe
 
 ### Dashboard — Snoozed Pilots
 
-![Dashboard Snoozed](images/snoozed.jpg)
+![Dashboard Snoozed](https://raw.githubusercontent.com/SteveTh3Piirate/aa-captrack/refs/heads/master/images/snoozed.jpg)
 
 Pilots can be snoozed individually to suppress alerts and notifications for a configurable duration.
 
@@ -194,7 +199,7 @@ Pilots can be snoozed individually to suppress alerts and notifications for a co
 
 ### Admin — CapTrack Settings
 
-![Admin Settings](images/admin-settings.jpg)
+![Admin Settings](https://raw.githubusercontent.com/SteveTh3Piirate/aa-captrack/refs/heads/master/images/admin-settings.jpg)
 
 All configuration is managed through a single settings entry in the AllianceAuth admin panel.
 
@@ -202,7 +207,7 @@ All configuration is managed through a single settings entry in the AllianceAuth
 
 ### Discord — Critical Alert Example
 
-![Discord Critical Alert](images/discord-critical.jpg)
+![Discord Critical Alert](https://raw.githubusercontent.com/SteveTh3Piirate/aa-captrack/refs/heads/master/images/discord-critical.jpg)
 
 Critical alerts (Titans, Supercarriers) are always sent immediately.
 

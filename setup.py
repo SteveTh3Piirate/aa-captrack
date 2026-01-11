@@ -13,6 +13,11 @@ setup(
     long_description_content_type="text/markdown",
     author="Stephen Swindlehurst",
     license="MIT",
+    url="https://github.com/SteveTh3Piirate/aa-captrack",
+    project_urls={
+        "Source": "https://github.com/SteveTh3Piirate/aa-captrack",
+        "Issues": "https://github.com/SteveTh3Piirate/aa-captrack/issues",
+    },
     packages=find_packages(),
     include_package_data=True,
     python_requires=">=3.10",
