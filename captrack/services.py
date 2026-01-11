@@ -3,7 +3,14 @@ from collections import defaultdict
 from corptools.models.assets import CharacterAsset
 from allianceauth.authentication.models import CharacterOwnership
 
-CAPITAL_GROUP_IDS = [30, 485, 547, 659, 1538]
+CAPITAL_GROUP_IDS = [
+    30,    # Titans (includes faction titans)
+    485,   # Supercarriers
+    547,   # Carriers
+    659,   # Dreadnoughts
+    1972,  # Lancer Dreadnoughts
+    1538,  # Force Auxiliaries
+]
 
 
 def get_capitals_in_blacklisted_regions(blacklisted_regions):
