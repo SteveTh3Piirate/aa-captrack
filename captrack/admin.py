@@ -86,10 +86,16 @@ class CapWatchlistAdmin(admin.ModelAdmin):
         "first_detected",
         "last_seen",
     )
+
+    # NOTE:
+    # AllianceAuth's CharacterOwnership usually links to a Character model via `.character`.
+    # Some installations expose name/id differently, so we keep search conservative.
     search_fields = (
-        "character__character__character_name",
-        "character__character__character_id",
+        "character__character_id",                 # CharacterOwnership.character_id (if present)
+        "character__character__character_name",    # CharacterOwnership.character.character_name (common)
+        "character__character__character_id",      # CharacterOwnership.character.character_id (common)
     )
+
     readonly_fields = (
         "character",
         "first_detected",
@@ -100,11 +106,49 @@ class CapWatchlistAdmin(admin.ModelAdmin):
         # Watchlist entries are created automatically by the scanner
         return False
 
+    @staticmethod
+    def _get_co(obj):
+        """Return the CharacterOwnership object from a CapWatchlist row."""
+        return getattr(obj, "character", None)
+
     def character_name(self, obj):
-        return obj.character.character.character_name
+        """
+        Best-effort character name resolution across different AA model shapes.
+        Never raise an exception (admin list must not 500).
+        """
+        co = self._get_co(obj)
+        if not co:
+            return "(missing)"
+
+        # Common AA shape: CharacterOwnership.character -> Character with character_name
+        ch = getattr(co, "character", None)
+        if ch and hasattr(ch, "character_name") and ch.character_name:
+            return ch.character_name
+
+        # Some shapes may store name directly on CharacterOwnership
+        name = getattr(co, "character_name", None)
+        if name:
+            return name
+
+        return str(co)
 
     def character_id(self, obj):
-        return obj.character.character.character_id
+        """
+        Best-effort character id resolution across different AA model shapes.
+        """
+        co = self._get_co(obj)
+        if not co:
+            return ""
+
+        ch = getattr(co, "character", None)
+        if ch and hasattr(ch, "character_id") and ch.character_id:
+            return ch.character_id
+
+        cid = getattr(co, "character_id", None)
+        if cid:
+            return cid
+
+        return ""
 
     character_name.short_description = "Character"
     character_id.short_description = "Character ID"
