@@ -10,6 +10,7 @@ aa_captrack.egg-info/top_level.txt
 captrack/__init__.py
 captrack/admin.py
 captrack/apps.py
+captrack/constants.py
 captrack/helpers.py
 captrack/hooks.py
 captrack/models.py
@@ -20,6 +21,8 @@ captrack/views.py
 captrack/migrations/0001_initial.py
 captrack/migrations/__init__.py
 captrack/templates/captrack/dashboard.html
+captrack/utils/__init__.py
+captrack/utils/discord.py
 testproj/__init__.py
 testproj/manage.py
 testproj/models-mock.py

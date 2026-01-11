@@ -2,6 +2,8 @@ from allianceauth import hooks
 from allianceauth.services.hooks import MenuItemHook
 from django.utils.translation import gettext_lazy as _
 
+from .constants import CAPTRACK_BASIC_ACCESS_PERM
+
 
 class CapTrackMenu(MenuItemHook):
     def __init__(self):
@@ -17,14 +19,14 @@ class CapTrackMenu(MenuItemHook):
         """
         Hide menu item for users without permission.
 
-        Works with older AllianceAuth versions where menu hooks are called
-        with no args (hook()), because render() still receives request.
+        Compatible with older AA versions where menu hooks are called with no args,
+        because render() still receives request.
         """
         user = getattr(request, "user", None)
         if not user or not user.is_authenticated:
             return ""
 
-        if not user.has_perm("captrack.basic_access"):
+        if not user.has_perm(CAPTRACK_BASIC_ACCESS_PERM):
             return ""
 
         return super().render(request)
