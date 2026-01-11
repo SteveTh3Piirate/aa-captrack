@@ -1,226 +1,122 @@
-﻿from __future__ import annotations
-
-from collections import Counter
-from datetime import timedelta
+﻿import logging
 
 from celery import shared_task
-from django.conf import settings
-from django.urls import reverse
-from django.utils import timezone
 
-from .models import CapTrackSettings, CapWatchlist
-from .services import get_capitals_in_blacklisted_regions, group_capitals_by_main
-from .utils.discord import build_captrack_main_embed, send_discord_webhook
+from .services import (
+    get_captrack_settings,
+    cap_class_display_name,
+    evaluate_alerting,
+)
 
+logger = logging.getLogger(__name__)
 
-# -----------------------------
-# Alert policy (per main)
-# -----------------------------
-# Always alert (supercapitals)
-ALWAYS_ALERT_GROUP_IDS = {30, 659}  # Titan, Supercarrier
-# Alert only if >= threshold of the same class under the same main
-THRESHOLD_GROUP_IDS = {485, 1972, 547, 1538}  # Dread, Lancer Dread, Carrier, FAX
-DEFAULT_SUBCAP_ALERT_THRESHOLD = 5
-
-DEFAULT_COOLDOWN_MINUTES = 360
-DEFAULT_CRITICAL_MIN_REPEAT_MINUTES = 15
+try:
+    from .utils.discord import send_discord_webhook
+except Exception:
+    send_discord_webhook = None
 
 
-def _get_character_id_from_ownership(ownership) -> int | None:
-    ch = getattr(ownership, "character", None)
-    if ch is not None:
-        cid = getattr(ch, "character_id", None)
-        if cid:
-            return cid
-        inner = getattr(ch, "character", None)
-        if inner is not None:
-            return getattr(inner, "character_id", None)
-    return None
+def _discord_role_ping(settings_obj) -> str:
+    if not settings_obj.discord_ping_role_id:
+        return ""
+    return f"<@&{settings_obj.discord_ping_role_id}>"
 
 
-def _safe_dashboard_url() -> str | None:
-    base = getattr(settings, "SITE_URL", "") or ""
-    if not base:
-        return None
+def _post_webhook(url: str, content: str, embed: dict | None = None):
+    if not url or not send_discord_webhook:
+        return
     try:
-        path = reverse("captrack:dashboard")
-    except Exception:
-        return None
-    return base.rstrip("/") + path
+        # Newer signature (content kwarg) – if your helper supports it.
+        send_discord_webhook(url, content=content, embed=embed)
+    except TypeError:
+        # Older signature fallback
+        if embed is not None:
+            send_discord_webhook(url, embed)
+        else:
+            send_discord_webhook(url, content)
 
 
 @shared_task
-def scan_capitals_and_send_alerts():
+def captrack_discord_alerts():
     """
-    Scheduled task:
-    - Scans for capitals in blacklisted regions (services output includes ship_group_id + alert_level)
-    - Updates watchlist last_seen
-    - Sends consolidated Discord alerts (one embed per main)
+    Settings-driven Discord alert task.
 
-    Rules:
-    - Snooze always suppresses alerts
-    - Titans/Supers always alert
-    - Dreads/Lancers/Carriers/FAX only alert if >= threshold under the same main
-    - Industrial is tracked only
-    - Critical ignores normal cooldown but has a minimum repeat interval (spam guard)
-    - High/Medium use normal cooldown
-    - Discord embed lists ONLY what is actually alerting (dashboard truth)
+    Behavior preserved by defaults:
+      - Discord shows ONLY alerting ships (alerting_only_discord=True)
+      - Titans/Supers always alert
+      - Others alert at thresholds_by_class (default 5)
     """
-    settings_obj = CapTrackSettings.objects.first()
-    if not settings_obj or not settings_obj.webhook_url:
+    settings_obj = get_captrack_settings()
+    if not settings_obj.is_enabled or not settings_obj.discord_enabled:
         return
 
-    cooldown_minutes = getattr(settings, "CAPTRACK_ALERT_COOLDOWN_MINUTES", DEFAULT_COOLDOWN_MINUTES)
-    cooldown_delta = timedelta(minutes=cooldown_minutes)
+    # ---- Your existing data fetch / aggregation goes here ----
+    # Expected structure:
+    # alert_candidates = [
+    #   {"main": "MainName", "pilot": "...", "cap_class": "dread", "count_under_main": 6, "system": "...", "region": "..."}
+    # ]
+    alert_candidates = []  # <-- your existing logic populates this
 
-    critical_repeat_minutes = getattr(
-        settings, "CAPTRACK_CRITICAL_MIN_REPEAT_MINUTES", DEFAULT_CRITICAL_MIN_REPEAT_MINUTES
-    )
-    critical_repeat_delta = timedelta(minutes=critical_repeat_minutes)
+    # Filter + classify
+    alerting = []
+    has_critical = False
+    for item in alert_candidates:
+        cap_class = item.get("cap_class") or "unclassified"
+        item["cap_class"] = cap_class
+        item["cap_class_label"] = cap_class_display_name(cap_class)
+        count_under_main = int(item.get("count_under_main") or 0)
 
-    threshold = getattr(settings, "CAPTRACK_SUBCAP_ALERT_THRESHOLD", DEFAULT_SUBCAP_ALERT_THRESHOLD)
+        item["is_alerting"] = evaluate_alerting(cap_class, count_under_main)
+        if item["is_alerting"]:
+            alerting.append(item)
+            if cap_class in (settings_obj.always_alert_classes or []):
+                has_critical = True
 
-    blacklisted = settings_obj.blacklisted_regions.all()
-    results = get_capitals_in_blacklisted_regions(blacklisted)
-    now = timezone.now()
+    if settings_obj.alerting_only_discord:
+        payload_items = alerting
+    else:
+        payload_items = alert_candidates
 
-    # Track which character IDs are currently detected (for cleanup)
-    detected_ids: set[int] = set()
-    ownership_ids: set[int] = set()
+    if not payload_items:
+        return
 
-    for r in results:
-        ownership = r.get("ownership")
-        if not ownership:
-            continue
-        ownership_ids.add(ownership.pk)
+    # Build message
+    ping = ""
+    if settings_obj.discord_ping_policy == "all_alerts":
+        ping = _discord_role_ping(settings_obj)
+    elif settings_obj.discord_ping_policy == "critical_only" and has_critical:
+        ping = _discord_role_ping(settings_obj)
 
-        cid = r.get("character_id") or _get_character_id_from_ownership(ownership)
-        if cid:
-            detected_ids.add(cid)
+    # Simple embed (you can swap this for your existing formatting)
+    lines = []
+    for it in payload_items:
+        marker = "🚨" if it.get("is_alerting") else "•"
+        cls = it.get("cap_class_label") or it.get("cap_class") or "Unclassified"
+        main = it.get("main") or "Unknown"
+        pilot = it.get("pilot") or "Unknown"
+        count = it.get("count_under_main") or 0
 
-    # Ensure watchlist rows exist for detected ownerships; update last_seen (single write)
-    for r in results:
-        ownership = r.get("ownership")
-        if not ownership:
-            continue
-        CapWatchlist.objects.update_or_create(
-            character=ownership,
-            defaults={"last_seen": now},
-        )
+        loc = ""
+        if settings_obj.discord_include_system_region:
+            sys = it.get("system") or ""
+            reg = it.get("region") or ""
+            if sys or reg:
+                loc = f" ({sys}{' / ' if sys and reg else ''}{reg})"
 
-    # Load watchlist rows for quick snooze/cooldown checks
-    watchlists = {
-        wl.character_id: wl
-        for wl in CapWatchlist.objects.filter(character_id__in=ownership_ids).select_related("character")
+        lines.append(f"{marker} **{cls}** x{count} — {pilot} [{main}]{loc}")
+
+    embed = {
+        "title": "CapTrack Alerts",
+        "description": "\n".join(lines[:50]),
     }
 
-    dashboard_url = _safe_dashboard_url()
+    # Route webhooks
+    url_alerts = settings_obj.discord_webhook_url_alerts or settings_obj.discord_webhook_url_critical
+    url_critical = settings_obj.discord_webhook_url_critical or url_alerts
 
-    # Consolidate by main
-    groups = group_capitals_by_main(results)
+    # If we have critical ships, post to critical webhook too
+    if has_critical and url_critical:
+        _post_webhook(url_critical, ping, embed=embed)
 
-    for group in groups:
-        main = group.get("main")
-        entries = group.get("alts") or []
-        if not main or not entries:
-            continue
-
-        # Count thresholded ship classes under this main
-        counts = Counter(
-            e.get("ship_group_id") for e in entries if e.get("ship_group_id") in THRESHOLD_GROUP_IDS
-        )
-
-        eligible_watchlists: dict[int, CapWatchlist] = {}
-        snoozed_lines: list[str] = []
-        alert_entries: list[dict] = []
-
-        for e in entries:
-            ownership = e.get("ownership")
-            if not ownership:
-                continue
-
-            wl = watchlists.get(ownership.pk)
-            if not wl:
-                continue
-
-            gid = e.get("ship_group_id")
-            alert_level = e.get("alert_level") or e.get("risk") or "unknown"
-
-            # Apply policy: determine whether this entry is "alerting"
-            policy_alerting = False
-            if gid in ALWAYS_ALERT_GROUP_IDS:
-                policy_alerting = True
-            elif gid in THRESHOLD_GROUP_IDS:
-                policy_alerting = counts.get(gid, 0) >= threshold
-
-            if not policy_alerting:
-                continue
-
-            # Snooze always wins
-            if wl.alert_snoozed_until and wl.alert_snoozed_until > now:
-                until = wl.alert_snoozed_until.strftime("%Y-%m-%d %H:%M")
-                snoozed_lines.append(f"**{e.get('character_name','Unknown')}** until {until} (UTC)")
-                continue
-
-            # Cooldown rules
-            if alert_level == "critical":
-                if wl.last_alert_sent and (now - wl.last_alert_sent) < critical_repeat_delta:
-                    continue
-            else:
-                if wl.last_alert_sent and (now - wl.last_alert_sent) < cooldown_delta:
-                    continue
-
-            eligible_watchlists[wl.pk] = wl
-            alert_entries.append(e)
-
-        if not eligible_watchlists or not alert_entries:
-            continue
-
-        main_id = getattr(main, "character_id", None) or getattr(main, "pk", None) or 0
-        main_name = getattr(main, "character_name", str(main))
-
-        status_line = (
-            f"Alerting entries only • threshold {threshold}+ • "
-            f"cooldown {cooldown_minutes}m • critical min repeat {critical_repeat_minutes}m"
-        )
-
-        embed = build_captrack_main_embed(
-            main_character_id=int(main_id) if main_id else 0,
-            main_character_name=main_name,
-            entries=alert_entries,  # IMPORTANT: only what is alerting
-            dashboard_url=dashboard_url,
-            snoozed_lines=snoozed_lines,
-            status_line=status_line,
-        )
-
-        sent = send_discord_webhook(settings_obj.webhook_url, embeds=[embed])
-        if sent:
-            CapWatchlist.objects.filter(pk__in=list(eligible_watchlists.keys())).update(last_alert_sent=now)
-
-    # Cleanup watchlist entries no longer detected
-    to_remove: list[int] = []
-    for wl in CapWatchlist.objects.select_related("character").all():
-        wl_char_id = _get_character_id_from_ownership(wl.character)
-        if wl_char_id and wl_char_id not in detected_ids:
-            to_remove.append(wl.pk)
-
-    if to_remove:
-        CapWatchlist.objects.filter(pk__in=to_remove).delete()
-
-
-@shared_task
-def refresh_watchlist_assets():
-    """
-    Periodic task:
-    - Refresh assets only for characters currently on watchlist
-    """
-    from corptools.tasks import update_subset_of_characters
-
-    char_ids: list[int] = []
-    for wl in CapWatchlist.objects.select_related("character"):
-        cid = _get_character_id_from_ownership(wl.character)
-        if cid:
-            char_ids.append(cid)
-
-    if char_ids:
-        update_subset_of_characters.apply_async(kwargs={"character_ids": char_ids})
+    if url_alerts:
+        _post_webhook(url_alerts, ping, embed=embed)

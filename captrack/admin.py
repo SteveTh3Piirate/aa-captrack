@@ -1,154 +1,101 @@
 from django.contrib import admin, messages
-from django.shortcuts import redirect
+from django.utils.html import format_html
 from django.urls import path
-from django.core.exceptions import ValidationError
-from django.utils.safestring import mark_safe
+from django.shortcuts import redirect
 
-from .models import CapTrackSettings, CapWatchlist
-from eveuniverse.models import EveRegion
+from .models import CapTrackSettings, CapTrackSettingsAudit
 
 
-# ------------------------------------------------------------
-#  CapTrack Settings Admin
-# ------------------------------------------------------------
+@admin.register(CapTrackSettingsAudit)
+class CapTrackSettingsAuditAdmin(admin.ModelAdmin):
+    list_display = ("changed_at", "changed_by")
+    readonly_fields = ("changed_at", "changed_by", "diff")
+    search_fields = ("changed_by__username",)
+    ordering = ("-changed_at",)
+
+
 @admin.register(CapTrackSettings)
 class CapTrackSettingsAdmin(admin.ModelAdmin):
-    autocomplete_fields = ("blacklisted_regions",)
-    fields = ("blacklisted_regions", "webhook_url", "test_webhook_button")
-    readonly_fields = ("test_webhook_button",)
+    fieldsets = (
+        ("General", {"fields": ("is_enabled",)}),
+        ("Tracking", {"fields": ("tracked_group_ids", "tracked_industrial_group_ids")}),
+        ("Classification & Labels", {"fields": ("class_display_names", "show_unclassified_bucket")}),
+        ("Alert Rules", {"fields": ("always_alert_classes", "thresholds_by_class", "ignore_classes", "include_tracked_only_in_dashboard")}),
+        ("Discord", {"fields": ("discord_enabled", "discord_webhook_url_critical", "discord_webhook_url_alerts", "discord_ping_policy", "discord_ping_role_id", "discord_message_mode", "discord_include_system_region", "discord_include_dashboard_link", "dashboard_base_url", "alerting_only_discord")}),
+        ("Snooze", {"fields": ("snooze_scope", "snooze_durations_minutes")}),
+        ("Dashboard", {"fields": ("dashboard_refresh_seconds", "dashboard_default_collapsed", "dashboard_remember_collapse_state")}),
+    )
 
     def has_add_permission(self, request):
-        # Only one settings object allowed
+        # Singleton: only allow add if no settings exist
         return not CapTrackSettings.objects.exists()
 
-    def formfield_for_manytomany(self, db_field, request, **kwargs):
-        if db_field.name == "blacklisted_regions":
-            kwargs["queryset"] = (
-                EveRegion.objects.all()
-                .exclude(name__regex=r"^[A-Z]-R\d{5}$")   # wormhole pseudo-regions
-                .exclude(name__regex=r"^[A-Z]{1,2}-\d{2}$")  # wormhole constellations
-            )
-        return super().formfield_for_manytomany(db_field, request, **kwargs)
-
-    def test_webhook_button(self, obj):
-        if not obj.pk:
-            return "Save settings first."
-        return mark_safe(
-            f'<a class="button" '
-            f'style="padding:6px 10px; background:#5e9ed6; color:white; '
-            f'border-radius:4px; text-decoration:none;" '
-            f'href="../../{obj.pk}/test-webhook/">Send Test Webhook</a>'
-        )
-
-    test_webhook_button.short_description = "Webhook Test"
+    def save_model(self, request, obj, form, change):
+        # Save and write an audit record with changed_by
+        super().save_model(request, obj, form, change)
+        # Attach changed_by to the latest audit entry if present and missing
+        latest = obj.audit_entries.first()
+        if latest and latest.changed_by_id is None:
+            latest.changed_by = request.user
+            latest.save(update_fields=["changed_by"])
 
     def get_urls(self):
         urls = super().get_urls()
-        custom = [
-            path(
-                "<path:object_id>/test-webhook/",
-                self.admin_site.admin_view(self.test_webhook_view),
-                name="captrack_test_webhook",
-            )
+        custom_urls = [
+            path("send-test-alerts/", self.admin_site.admin_view(self.send_test_alerts), name="captrack_send_test_alerts"),
+            path("send-test-critical/", self.admin_site.admin_view(self.send_test_critical), name="captrack_send_test_critical"),
         ]
-        return custom + urls
+        return custom_urls + urls
 
-    def test_webhook_view(self, request, object_id):
-        obj = self.get_object(request, object_id)
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context["captrack_test_buttons"] = True
+        return super().changelist_view(request, extra_context=extra_context)
 
-        if obj is None:
-            self.message_user(request, "Settings object not found.", messages.ERROR)
-            return redirect("../../")
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        extra_context = extra_context or {}
+        extra_context["captrack_test_buttons"] = True
+        return super().change_view(request, object_id, form_url, extra_context=extra_context)
 
+    def _send_test(self, request, critical: bool):
+        # Lazy import to avoid circulars
         try:
-            obj.send_test_webhook()
-            self.message_user(request, "Webhook sent successfully.", messages.SUCCESS)
-        except ValidationError as e:
-            self.message_user(request, f"Webhook failed: {e}", messages.ERROR)
+            from .tasks import _post_webhook, _discord_role_ping
         except Exception as e:
-            self.message_user(request, f"Unexpected error: {e}", messages.ERROR)
+            messages.error(request, f"Unable to import Discord sender: {e}")
+            return redirect("..")
 
-        return redirect("../../")
+        settings_obj = CapTrackSettings.objects.first()
+        if not settings_obj:
+            messages.error(request, "No CapTrackSettings row found. Create/save settings first.")
+            return redirect("..")
 
+        if not settings_obj.discord_enabled:
+            messages.warning(request, "Discord is disabled in settings.")
+            return redirect("..")
 
-# ------------------------------------------------------------
-#  CapWatchlist Admin
-# ------------------------------------------------------------
-@admin.register(CapWatchlist)
-class CapWatchlistAdmin(admin.ModelAdmin):
-    """
-    Displays characters currently being monitored for capital movement.
-    This list is maintained automatically by the scanner.
-    """
-    list_display = (
-        "character_name",
-        "character_id",
-        "first_detected",
-        "last_seen",
-    )
+        url = settings_obj.discord_webhook_url_critical if critical else (settings_obj.discord_webhook_url_alerts or settings_obj.discord_webhook_url_critical)
+        if not url:
+            messages.error(request, "No Discord webhook URL set in settings.")
+            return redirect("..")
 
-    # NOTE:
-    # AllianceAuth's CharacterOwnership usually links to a Character model via `.character`.
-    # Some installations expose name/id differently, so we keep search conservative.
-    search_fields = (
-        "character__character_id",                 # CharacterOwnership.character_id (if present)
-        "character__character__character_name",    # CharacterOwnership.character.character_name (common)
-        "character__character__character_id",      # CharacterOwnership.character.character_id (common)
-    )
+        ping = ""
+        if settings_obj.discord_ping_policy == "all_alerts":
+            ping = _discord_role_ping(settings_obj)
+        elif settings_obj.discord_ping_policy == "critical_only" and critical:
+            ping = _discord_role_ping(settings_obj)
 
-    readonly_fields = (
-        "character",
-        "first_detected",
-        "last_seen",
-    )
+        embed = {
+            "title": "CapTrack Test Message (Critical)" if critical else "CapTrack Test Message (Alerts)",
+            "description": "This is a test message from CapTrack admin settings.",
+        }
 
-    def has_add_permission(self, request):
-        # Watchlist entries are created automatically by the scanner
-        return False
+        _post_webhook(url, ping, embed=embed)
+        messages.success(request, "Test message sent.")
+        return redirect("..")
 
-    @staticmethod
-    def _get_co(obj):
-        """Return the CharacterOwnership object from a CapWatchlist row."""
-        return getattr(obj, "character", None)
+    def send_test_alerts(self, request):
+        return self._send_test(request, critical=False)
 
-    def character_name(self, obj):
-        """
-        Best-effort character name resolution across different AA model shapes.
-        Never raise an exception (admin list must not 500).
-        """
-        co = self._get_co(obj)
-        if not co:
-            return "(missing)"
-
-        # Common AA shape: CharacterOwnership.character -> Character with character_name
-        ch = getattr(co, "character", None)
-        if ch and hasattr(ch, "character_name") and ch.character_name:
-            return ch.character_name
-
-        # Some shapes may store name directly on CharacterOwnership
-        name = getattr(co, "character_name", None)
-        if name:
-            return name
-
-        return str(co)
-
-    def character_id(self, obj):
-        """
-        Best-effort character id resolution across different AA model shapes.
-        """
-        co = self._get_co(obj)
-        if not co:
-            return ""
-
-        ch = getattr(co, "character", None)
-        if ch and hasattr(ch, "character_id") and ch.character_id:
-            return ch.character_id
-
-        cid = getattr(co, "character_id", None)
-        if cid:
-            return cid
-
-        return ""
-
-    character_name.short_description = "Character"
-    character_id.short_description = "Character ID"
+    def send_test_critical(self, request):
+        return self._send_test(request, critical=True)
