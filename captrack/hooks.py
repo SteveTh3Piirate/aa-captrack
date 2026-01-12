@@ -36,3 +36,8 @@ class CapTrackMenu(MenuItemHook):
 def register_captrack_menu():
     # NOTE: Older AA versions call menu_item_hook with no args.
     return CapTrackMenu()
+
+@hooks.register("url_hook")
+def register_urls():
+    # This makes your app available at /captrack/ without editing myauth/urls.py
+    return UrlHook(urls, "captrack", r"^captrack/")
