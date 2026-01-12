@@ -1,8 +1,13 @@
+# captrack/hooks.py
+
 from allianceauth import hooks
 from allianceauth.services.hooks import MenuItemHook, UrlHook
 from django.utils.translation import gettext_lazy as _
 
 from .constants import CAPTRACK_BASIC_ACCESS_PERM
+
+# IMPORTANT: import the urls module so UrlHook has urlpatterns
+from . import urls as captrack_urls
 
 
 class CapTrackMenu(MenuItemHook):
@@ -18,9 +23,7 @@ class CapTrackMenu(MenuItemHook):
     def render(self, request):
         """
         Hide menu item for users without permission.
-
-        Compatible with older AA versions where menu hooks are called with no args,
-        because render() still receives request.
+        Compatible with older AA versions.
         """
         user = getattr(request, "user", None)
         if not user or not user.is_authenticated:
@@ -34,10 +37,10 @@ class CapTrackMenu(MenuItemHook):
 
 @hooks.register("menu_item_hook")
 def register_captrack_menu():
-    # NOTE: Older AA versions call menu_item_hook with no args.
     return CapTrackMenu()
+
 
 @hooks.register("url_hook")
 def register_urls():
-    # This makes your app available at /captrack/ without editing myauth/urls.py
-    return UrlHook(urls, "captrack", r"^captrack/")
+    # Expose /captrack/ without editing myauth/urls.py
+    return UrlHook(captrack_urls, "captrack", r"^captrack/")
