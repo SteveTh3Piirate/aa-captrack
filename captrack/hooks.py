@@ -1,5 +1,5 @@
 from allianceauth import hooks
-from allianceauth.services.hooks import MenuItemHook
+from allianceauth.services.hooks import MenuItemHook, UrlHook
 from django.utils.translation import gettext_lazy as _
 
 from .constants import CAPTRACK_BASIC_ACCESS_PERM
