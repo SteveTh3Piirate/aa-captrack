@@ -6,7 +6,8 @@ from django.utils.translation import gettext_lazy as _
 
 from .constants import CAPTRACK_BASIC_ACCESS_PERM
 
-# IMPORTANT: import the urls module so UrlHook has urlpatterns
+# IMPORTANT:
+# Import the app's urls module so UrlHook has access to urlpatterns
 from . import urls as captrack_urls
 
 
@@ -23,7 +24,7 @@ class CapTrackMenu(MenuItemHook):
     def render(self, request):
         """
         Hide menu item for users without permission.
-        Compatible with older AA versions.
+        Compatible with older AllianceAuth versions.
         """
         user = getattr(request, "user", None)
         if not user or not user.is_authenticated:
@@ -42,5 +43,7 @@ def register_captrack_menu():
 
 @hooks.register("url_hook")
 def register_urls():
-    # Expose /captrack/ without editing myauth/urls.py
+    """
+    Expose /captrack/ automatically without modifying myauth/urls.py
+    """
     return UrlHook(captrack_urls, "captrack", r"^captrack/")
