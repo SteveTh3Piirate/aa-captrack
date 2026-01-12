@@ -7,7 +7,7 @@ README = (BASE_DIR / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="aa-captrack",
-    version="1.0.0",
+    version="1.0.1",
     description="Capital ship movement early warning plugin for AllianceAuth",
     long_description=README,
     long_description_content_type="text/markdown",
