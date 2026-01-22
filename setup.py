@@ -7,11 +7,11 @@ README = (BASE_DIR / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="aa-captrack",
-    version="1.0.5",
+    version="1.0.6",
     description="Capital ship movement early warning plugin for AllianceAuth",
     long_description=README,
     long_description_content_type="text/markdown",
-    author="Stephen Swindlehurst",
+    author="SteveTh3Piirate",
     license="MIT",
     url="https://github.com/SteveTh3Piirate/aa-captrack",
     project_urls={

@@ -15,7 +15,7 @@
             padding: 0.75rem 1rem;
         }
 
-            .captrack-card-header button {
+            .captrack-card-header .captrack-collapse-toggle {
                 background: none;
                 border: none;
                 color: inherit;
@@ -35,9 +35,15 @@
                 transform-origin: center;
             }
 
-            .captrack-card-header button[aria-expanded="true"] .chevron {
+            .captrack-card-header .captrack-collapse-toggle[aria-expanded="true"] .chevron {
                 transform: rotate(90deg);
             }
+
+        .captrack-subline {
+            font-weight: 400;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.65);
+        }
 
         .captrack-table-dark {
             background-color: #181818;
@@ -138,26 +144,75 @@
 
     <div class="card mt-4" style="background-color:#111; border:1px solid #3A3F44; border-radius:0.5rem;">
 
-        <div class="captrack-card-header">
+        <div class="captrack-card-header d-flex align-items-center justify-content-between gap-2">
             <button type="button"
+                    class="captrack-collapse-toggle flex-grow-1"
                     data-bs-toggle="collapse"
                     data-bs-target="#captrack-collapse-{{ forloop.counter }}"
                     aria-controls="captrack-collapse-{{ forloop.counter }}"
                     aria-expanded="{% if group.max_alert_level == 'critical' %}true{% else %}false{% endif %}">
-                <span>
+
+                <span class="d-flex align-items-center">
                     <img src="{{ group.main.portrait_url_128 }}"
                          class="rounded me-2"
                          width="32" height="32">
-                    {{ group.main.character_name }}
+
+                    <span class="d-inline-block">
+                        <div>{{ group.main.character_name }}</div>
+
+                        <div class="captrack-subline d-flex flex-wrap align-items-center gap-2">
+                            <span class="d-flex align-items-center">
+                                {% if group.corp_logo_url %}
+                                <img src="{{ group.corp_logo_url }}"
+                                     class="rounded me-1"
+                                     width="16" height="16">
+                                {% endif %}
+                                {{ group.corp_name|default:"(Unknown Corp)" }}
+                            </span>
+
+                            {% if group.alliance_name %}
+                            <span class="d-flex align-items-center">
+                                {% if group.alliance_logo_url %}
+                                <img src="{{ group.alliance_logo_url }}"
+                                     class="rounded me-1"
+                                     width="16" height="16">
+                                {% endif %}
+                                {{ group.alliance_name }}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </span>
                 </span>
 
-                <span class="d-flex align-items-center">
+                <span class="d-flex align-items-center ms-2">
                     <span class="alert-badge alert-{{ group.max_alert_level|default:'unknown' }} me-2">
                         {{ group.max_alert_level|default:"unknown" }}
                     </span>
                     <span class="chevron text-muted">▸</span>
                 </span>
             </button>
+
+            <div class="d-flex align-items-center gap-2">
+                {% if group.audit_url %}
+                <a href="{{ group.audit_url }}"
+                   class="btn btn-outline-light btn-sm"
+                   title="CorpTools Audit"
+                   onclick="event.stopPropagation();">Audit</a>
+                {% endif %}
+
+                {% if group.watchlist_ids_str %}
+                <form method="post" class="d-flex align-items-center gap-1 m-0">
+                    {% csrf_token %}
+                    <input type="hidden" name="watchlist_ids" value="{{ group.watchlist_ids_str }}">
+                    <span class="captrack-subline me-1">Snooze all:</span>
+                    <button class="btn btn-outline-light btn-sm" name="snooze_action" value="1h">1h</button>
+                    <button class="btn btn-outline-light btn-sm" name="snooze_action" value="6h">6h</button>
+                    <button class="btn btn-outline-light btn-sm" name="snooze_action" value="24h">24h</button>
+                    <button class="btn btn-outline-light btn-sm" name="snooze_action" value="inf">∞</button>
+                    <button class="btn btn-outline-secondary btn-sm" name="snooze_action" value="clear">Clear</button>
+                </form>
+                {% endif %}
+            </div>
         </div>
 
         <div id="captrack-collapse-{{ forloop.counter }}"
@@ -175,7 +230,7 @@
                             <th>Structure / Station</th>
                             <th>Last Seen</th>
                             <th>Status</th>
-                            <th style="min-width: 220px;">Actions</th>
+                            <th style="min-width: 270px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -208,6 +263,7 @@
                                     <button class="btn btn-outline-light btn-sm" name="snooze_action" value="1h" {% if alt.is_snoozed %}disabled{% endif %}>1h</button>
                                     <button class="btn btn-outline-light btn-sm" name="snooze_action" value="6h" {% if alt.is_snoozed %}disabled{% endif %}>6h</button>
                                     <button class="btn btn-outline-light btn-sm" name="snooze_action" value="24h" {% if alt.is_snoozed %}disabled{% endif %}>24h</button>
+                                    <button class="btn btn-outline-light btn-sm" name="snooze_action" value="inf" {% if alt.is_snoozed %}disabled{% endif %}>∞</button>
                                     <button class="btn btn-outline-secondary btn-sm" name="snooze_action" value="clear">Clear</button>
                                 </form>
                                 {% endif %}

@@ -12,6 +12,12 @@
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
+.venv/
+*.egg-info/
+testproj/
+DEV_NOTES.md
+db.sqlite3
+.gitattributes
 
 # Mono auto generated files
 mono_crash.*
