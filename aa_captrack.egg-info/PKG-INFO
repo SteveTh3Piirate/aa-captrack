@@ -1,9 +1,9 @@
 Metadata-Version: 2.4
 Name: aa-captrack
-Version: 1.0.5
+Version: 1.0.6
 Summary: Capital ship movement early warning plugin for AllianceAuth
 Home-page: https://github.com/SteveTh3Piirate/aa-captrack
-Author: Stephen Swindlehurst
+Author: SteveTh3Piirate
 License: MIT
 Project-URL: Source, https://github.com/SteveTh3Piirate/aa-captrack
 Project-URL: Issues, https://github.com/SteveTh3Piirate/aa-captrack/issues

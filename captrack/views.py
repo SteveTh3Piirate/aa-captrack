@@ -2,6 +2,7 @@
 from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required, permission_required
+from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import render
 from django.utils import timezone
 
@@ -175,14 +176,29 @@ def dashboard(request):
         # Corporation / alliance info (names + logo urls)
         corp_id = getattr(main, "corporation_id", None)
         corp_name = getattr(main, "corporation_name", None)
-        corp_obj = getattr(main, "corporation", None)
+
+        # Note: AllianceAuth's EveCharacter.corporation / .alliance properties can raise
+        # DoesNotExist if the related info is not cached yet. We must not 500 the dashboard.
+        corp_obj = None
+        if main is not None:
+            try:
+                corp_obj = getattr(main, "corporation")
+            except ObjectDoesNotExist:
+                corp_obj = None
+
         if corp_obj:
             corp_id = corp_id or getattr(corp_obj, "corporation_id", None) or getattr(corp_obj, "corp_id", None)
             corp_name = corp_name or getattr(corp_obj, "corporation_name", None) or getattr(corp_obj, "name", None)
 
         alliance_id = getattr(main, "alliance_id", None)
         alliance_name = getattr(main, "alliance_name", None)
-        alliance_obj = getattr(main, "alliance", None)
+        alliance_obj = None
+        if main is not None and alliance_id:
+            try:
+                alliance_obj = getattr(main, "alliance")
+            except ObjectDoesNotExist:
+                alliance_obj = None
+
         if alliance_obj:
             alliance_id = alliance_id or getattr(alliance_obj, "alliance_id", None)
             alliance_name = alliance_name or getattr(alliance_obj, "alliance_name", None) or getattr(alliance_obj, "name", None)
