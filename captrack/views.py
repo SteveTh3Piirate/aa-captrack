@@ -2,8 +2,9 @@
 from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required, permission_required
-from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import render
+
+from allianceauth.eveonline.models import EveAllianceInfo, EveCorporationInfo
 from django.utils import timezone
 
 from .constants import CAPTRACK_BASIC_ACCESS_PERM
@@ -174,34 +175,31 @@ def dashboard(request):
         group["watchlist_ids_str"] = ",".join(str(i) for i in wl_ids)
 
         # Corporation / alliance info (names + logo urls)
-        corp_id = getattr(main, "corporation_id", None)
+        # IMPORTANT: Don't touch Character.corporation / Character.alliance properties here.
+        # Those properties can raise Eve*Info.DoesNotExist if the info tables haven't been
+        # hydrated yet. Instead, query EveCorporationInfo / EveAllianceInfo with filter().first().
+
+        corp_id = getattr(main, "corporation_id", None) or None
+        if corp_id == 0:
+            corp_id = None
         corp_name = getattr(main, "corporation_name", None)
 
-        # Note: AllianceAuth's EveCharacter.corporation / .alliance properties can raise
-        # DoesNotExist if the related info is not cached yet. We must not 500 the dashboard.
         corp_obj = None
-        if main is not None:
-            try:
-                corp_obj = getattr(main, "corporation")
-            except ObjectDoesNotExist:
-                corp_obj = None
+        if corp_id:
+            corp_obj = EveCorporationInfo.objects.filter(corporation_id=corp_id).first()
+            if corp_obj:
+                corp_name = corp_name or getattr(corp_obj, "corporation_name", None) or getattr(corp_obj, "name", None)
 
-        if corp_obj:
-            corp_id = corp_id or getattr(corp_obj, "corporation_id", None) or getattr(corp_obj, "corp_id", None)
-            corp_name = corp_name or getattr(corp_obj, "corporation_name", None) or getattr(corp_obj, "name", None)
-
-        alliance_id = getattr(main, "alliance_id", None)
+        alliance_id = getattr(main, "alliance_id", None) or None
+        if alliance_id == 0:
+            alliance_id = None
         alliance_name = getattr(main, "alliance_name", None)
-        alliance_obj = None
-        if main is not None and alliance_id:
-            try:
-                alliance_obj = getattr(main, "alliance")
-            except ObjectDoesNotExist:
-                alliance_obj = None
 
-        if alliance_obj:
-            alliance_id = alliance_id or getattr(alliance_obj, "alliance_id", None)
-            alliance_name = alliance_name or getattr(alliance_obj, "alliance_name", None) or getattr(alliance_obj, "name", None)
+        alliance_obj = None
+        if alliance_id:
+            alliance_obj = EveAllianceInfo.objects.filter(alliance_id=alliance_id).first()
+            if alliance_obj:
+                alliance_name = alliance_name or getattr(alliance_obj, "alliance_name", None) or getattr(alliance_obj, "name", None)
 
         group["corp_id"] = corp_id
         group["corp_name"] = corp_name

@@ -28,6 +28,13 @@
                 cursor: pointer;
             }
 
+            /* Compact toggle used on the right side of the header */
+            .captrack-card-header .captrack-collapse-toggle-compact {
+                width: auto;
+                justify-content: flex-end;
+                gap: 0.5rem;
+            }
+
             /* Chevron animation */
             .captrack-card-header .chevron {
                 display: inline-block;
@@ -184,12 +191,6 @@
                     </span>
                 </span>
 
-                <span class="d-flex align-items-center ms-2">
-                    <span class="alert-badge alert-{{ group.max_alert_level|default:'unknown' }} me-2">
-                        {{ group.max_alert_level|default:"unknown" }}
-                    </span>
-                    <span class="chevron text-muted">▸</span>
-                </span>
             </button>
 
             <div class="d-flex align-items-center gap-2">
@@ -212,6 +213,19 @@
                     <button class="btn btn-outline-secondary btn-sm" name="snooze_action" value="clear">Clear</button>
                 </form>
                 {% endif %}
+
+                <!-- Move the badge + chevron to the far right, after Audit + Snooze controls -->
+                <button type="button"
+                        class="captrack-collapse-toggle captrack-collapse-toggle-compact d-flex align-items-center"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#captrack-collapse-{{ forloop.counter }}"
+                        aria-controls="captrack-collapse-{{ forloop.counter }}"
+                        aria-expanded="{% if group.max_alert_level == 'critical' %}true{% else %}false{% endif %}">
+                    <span class="alert-badge alert-{{ group.max_alert_level|default:'unknown' }}">
+                        {{ group.max_alert_level|default:"unknown" }}
+                    </span>
+                    <span class="chevron text-muted">▸</span>
+                </button>
             </div>
         </div>
 
