@@ -14,7 +14,13 @@ from eveuniverse.models import EveRegion
 @admin.register(CapTrackSettings)
 class CapTrackSettingsAdmin(admin.ModelAdmin):
     autocomplete_fields = ("blacklisted_regions",)
-    fields = ("blacklisted_regions", "webhook_url", "test_webhook_button")
+    fields = (
+        "blacklisted_regions",
+        "webhook_url",
+        "discord_mention_roles",
+        "discord_mention_users",
+        "test_webhook_button",
+    )
     readonly_fields = ("test_webhook_button",)
 
     def has_add_permission(self, request):

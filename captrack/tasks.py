@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from .models import CapTrackSettings, CapWatchlist
 from .services import get_capitals_in_blacklisted_regions, group_capitals_by_main
-from .utils.discord import build_captrack_main_embed, send_discord_webhook
+from .utils.discord import build_captrack_main_embed, send_discord_webhook, build_discord_mentions
 
 
 # -----------------------------
@@ -193,7 +193,20 @@ def scan_capitals_and_send_alerts():
             status_line=status_line,
         )
 
-        sent = send_discord_webhook(settings_obj.webhook_url, embeds=[embed])
+        mention_text, allowed_mentions = build_discord_mentions(
+            roles_csv=getattr(settings_obj, "discord_mention_roles", ""),
+            users_csv=getattr(settings_obj, "discord_mention_users", ""),
+        )
+
+        # If configured, we prefix the alert with the desired mentions.
+        content = mention_text if mention_text else None
+
+        sent = send_discord_webhook(
+            settings_obj.webhook_url,
+            content=content,
+            embeds=[embed],
+            allowed_mentions=allowed_mentions,
+        )
         if sent:
             CapWatchlist.objects.filter(pk__in=list(eligible_watchlists.keys())).update(last_alert_sent=now)
 
