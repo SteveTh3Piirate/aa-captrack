@@ -76,6 +76,22 @@ def _should_alert(alert_level: str) -> bool:
 def get_capitals_in_blacklisted_regions(blacklisted_regions):
     region_ids = [r.id for r in blacklisted_regions]
 
+    def _eve_pk(obj, *names, default=None):
+        """Return the first non-None attribute from obj.
+
+        Corptools 3.x / eve_sde migration renamed a number of ID fields.
+        For example, eve_sde Region uses `id` (PK) where older models used
+        `region_id`. This helper keeps CapTrack compatible across schemas.
+        """
+        for n in names:
+            try:
+                v = getattr(obj, n)
+            except Exception:
+                v = None
+            if v is not None:
+                return v
+        return default
+
     assets = (
         CharacterAsset.objects
         .select_related(
@@ -107,7 +123,8 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
             continue
 
         region = asset.location_name.system.constellation.region
-        if region and region.region_id in region_ids:
+        region_id = _eve_pk(region, "region_id", "id", "pk")
+        if region_id is not None and region_id in region_ids:
             filtered_assets.append(asset)
 
     output: List[Dict[str, Any]] = []
@@ -141,9 +158,9 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         region_obj = system_obj.constellation.region if system_obj else None
 
         system_name = getattr(system_obj, "name", "(Unknown)")
-        system_id = getattr(system_obj, "system_id", None)
+        system_id = _eve_pk(system_obj, "system_id", "id", "pk")
         region_name = getattr(region_obj, "name", "(Unknown)")
-        region_id = getattr(region_obj, "region_id", None)
+        region_id = _eve_pk(region_obj, "region_id", "id", "pk")
 
         structure_name = asset.location_name.location_name or "(Unknown)"
         location_str = f"{region_name} → {system_name}"
