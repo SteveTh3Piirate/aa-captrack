@@ -4,6 +4,7 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from django.utils import timezone
+from django.core.exceptions import FieldError
 
 from corptools.models.assets import CharacterAsset
 from allianceauth.authentication.models import CharacterOwnership
@@ -87,8 +88,18 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
             "location_name__system__constellation",
             "location_name__system__constellation__region",
         )
-        .filter(type_name__group__group_id__in=CAPITAL_GROUP_IDS)
     )
+
+    # Corptools 3.x / eve_sde migration changed parts of the type/group model.
+    # Historically we filtered on type_name__group__group_id; newer schemas
+    # often use the PK (id) for the EVE group ID. Try the common variants.
+    try:
+        assets = assets.filter(type_name__group__group_id__in=CAPITAL_GROUP_IDS)
+    except FieldError:
+        try:
+            assets = assets.filter(type_name__group_id__in=CAPITAL_GROUP_IDS)
+        except FieldError:
+            assets = assets.filter(type_name__group__id__in=CAPITAL_GROUP_IDS)
 
     filtered_assets: List[CharacterAsset] = []
     for asset in assets:
@@ -111,7 +122,13 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         except CharacterOwnership.DoesNotExist:
             continue
 
-        ship_group_id = getattr(asset.type_name.group, "group_id", None)
+        group_obj = getattr(asset.type_name, "group", None)
+        ship_group_id = (
+            getattr(group_obj, "group_id", None)
+            or getattr(group_obj, "eve_group_id", None)
+            or getattr(group_obj, "id", None)
+            or getattr(group_obj, "pk", None)
+        )
         ship_type_id = (
             getattr(asset.type_name, "eve_type_id", None)
             or getattr(asset.type_name, "type_id", None)
