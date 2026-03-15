@@ -2,16 +2,18 @@
 
 AllianceAuth plugin for tracking and alerting on capital ship activity (and other configured ship groups) across characters/accounts, with an operational dashboard, snoozing, and Discord notifications.
 
-Version: **v1.0.9b3**  
+Version: **v1.0.9b4**  
 Status: **Pre-release (beta)**
 
 ---
 
-## What’s new in v1.0.9b3 (highlights)
+## What’s new in v1.0.9b4 (highlights)
 
-- **Corptools 3.0.0b6 / eve_sde compatibility**
-  - Updated lookups for **Type/Group** and **Region** ID fields under the new SDE-backed schema.
-  - Watchlist asset refresh updated to use **Corptools 3.x-compatible** tasks (avoids celery worker crashes).
+- **Corptools 3.x / eve_sde compatibility (b7 target)**
+  - Updated lookups for **Type/Group** and **Region** ID fields under the SDE-backed schema.
+  - Watchlist asset refresh updated for Corptools 3.x task API changes (signature-safe enqueue + b7 single-character `update_char_assets` support).
+- **Move region blacklist to SDE**
+  - “Blacklisted Regions” now uses **`eve_sde.Region`** (instead of EveUniverse/legacy region models) so region search/autocomplete works on SDE-backed installs.
 - **Dashboard UX improvements**
   - Card header includes **Main + Corporation + Alliance** names and **logos**.
   - **Audit** button links to Corptools audit: `/audit/r/<character_id>/account/overview`
@@ -129,7 +131,7 @@ Example:
 
 - AllianceAuth: **4.13+** (v4.x supported; v5 migration path is the motivation for this beta)
 - Django: 4.2+
-- Corptools: **3.0.0b6** (or compatible 3.x beta)
+- Corptools: **3.0.0b7** (or compatible 3.x beta)
 - Database: MySQL/MariaDB recommended
 
 If you are running Corptools 3.x, you also need the SDE stack working:
@@ -141,7 +143,7 @@ If you are running Corptools 3.x, you also need the SDE stack working:
 ### Install the plugin
 
 ```bash
-pip install aa-captrack==1.0.9b2
+pip install aa-captrack==1.0.9b4
 ```
 
 ### Add to `INSTALLED_APPS`
@@ -193,7 +195,7 @@ Only **one settings row** is expected.
 ## Background tasks
 
 CapTrack uses periodic tasks to refresh/watch data and drive alerts.  
-In **v1.0.9b3**, the “refresh watchlist assets” flow was updated to call **Corptools 3.x-compatible** update tasks (avoids Celery worker crashes caused by signature/parameter changes in Corptools).
+In **v1.0.9b4**, watchlist refresh was updated to handle Corptools 3.x task changes (celery-once signature validation, task name changes, and b7 single-character asset refresh).
 
 ---
 
@@ -202,7 +204,7 @@ In **v1.0.9b3**, the “refresh watchlist assets” flow was updated to call **C
 ### AllianceAuth / Corptools
 
 - AllianceAuth: **4.x (4.13+)**
-- Corptools: **3.0.0b6** (target), other 3.x betas may work
+- Corptools: **3.0.0b7** (target), other 3.x betas may work
 
 ### SDE / eve_sde
 
@@ -218,11 +220,13 @@ python manage.py esde_load_sde
 
 Corptools migrations may refuse to apply if eve_sde data is stale (>24h).
 
+CapTrack’s **Blacklisted Regions** feature also uses `eve_sde.Region`, so SDE data must be present for region search/autocomplete.
+
 ---
 
 ## Versioning policy
 
-- **v1.0.9b3**: Beta/pre-release focusing on Corptools 3.x + SDE compatibility
+- **v1.0.9b4**: Beta/pre-release focusing on Corptools 3.x + SDE migration + region blacklist fixes
 - Future versions will:
   - Avoid destructive migrations where possible
   - Prefer additive schema changes
