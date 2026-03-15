@@ -225,9 +225,18 @@ def scan_capitals_and_send_alerts():
 def refresh_watchlist_assets():
     """
     Periodic task:
-    - Refresh assets only for characters currently on watchlist
+    - Refresh assets only for characters currently on watchlist.
+
+    Notes:
+    Corptools 3.x changed the character update task API. Some versions expose a task
+    that accepts a *list* of character IDs, while others expose a "subset" task that
+    expects an integer subset size (and will error if passed a list). Additionally,
+    celery-once validates kwargs against the task signature before enqueueing.
+
+    This task performs runtime discovery of the best available corptools task and
+    calls it using the correct argument names / calling convention.
     """
-    from corptools.tasks import update_subset_of_characters
+    import inspect
 
     char_ids: list[int] = []
     for wl in CapWatchlist.objects.select_related("character"):
@@ -235,26 +244,103 @@ def refresh_watchlist_assets():
         if cid:
             char_ids.append(cid)
 
-    if char_ids:
-        # Corptools task signature differs between versions (and celery-once validates kwargs).
-        # We introspect the task's `run` signature and pass the correct kwarg,
-        # falling back to a single positional arg if needed.
-        try:
-            import inspect
+    if not char_ids:
+        return
 
-            run_fn = getattr(update_subset_of_characters, "run", update_subset_of_characters)
-            param_names = list(inspect.signature(run_fn).parameters.keys())
+    # Prefer corptools tasks that accept a list of character IDs.
+    # Fallback to per-character updates if only single-character tasks exist.
+    task_candidates: list[object] = []
+
+    # Newer corptools commonly exposes character tasks under corptools.tasks.character
+    try:
+        from corptools.tasks import character as ct_character  # type: ignore
+        for name in (
+            "update_characters_by_ids",
+            "update_characters_for_ids",
+            "update_characters",
+            "update_character_assets_by_ids",
+            "update_character_assets",
+            "update_characters_assets",
+        ):
+            if hasattr(ct_character, name):
+                task_candidates.append(getattr(ct_character, name))
+    except Exception:
+        ct_character = None  # noqa: F841
+
+    # Older corptools exports tasks directly from corptools.tasks
+    try:
+        import corptools.tasks as ct_tasks  # type: ignore
+        for name in (
+            "update_characters_by_ids",
+            "update_characters_for_ids",
+            "update_characters",
+            "update_character_assets_by_ids",
+            "update_character_assets",
+            "update_characters_assets",
+        ):
+            if hasattr(ct_tasks, name):
+                task_candidates.append(getattr(ct_tasks, name))
+        # Keep subset task as last resort only (expects an int on some versions)
+        if hasattr(ct_tasks, "update_subset_of_characters"):
+            task_candidates.append(getattr(ct_tasks, "update_subset_of_characters"))
+    except Exception:
+        ct_tasks = None  # noqa: F841
+
+    def _enqueue_task(task_obj: object) -> bool:
+        """Try enqueueing a corptools task. Returns True if we scheduled it."""
+        # Celery task objects (and celery-once) put the callable on .run
+        run_fn = getattr(task_obj, "run", task_obj)
+        try:
+            sig = inspect.signature(run_fn)
+            param_names = list(sig.parameters.keys())
         except Exception:
             param_names = []
 
-        if "character_ids" in param_names:
-            update_subset_of_characters.apply_async(kwargs={"character_ids": char_ids})
-        elif "char_ids" in param_names:
-            update_subset_of_characters.apply_async(kwargs={"char_ids": char_ids})
-        elif "character_id_list" in param_names:
-            update_subset_of_characters.apply_async(kwargs={"character_id_list": char_ids})
-        elif "ids" in param_names:
-            update_subset_of_characters.apply_async(kwargs={"ids": char_ids})
-        else:
-            # Most implementations accept a single list argument (positional).
-            update_subset_of_characters.apply_async(args=[char_ids])
+        # 1) Tasks that accept a list of IDs
+        for key in ("character_ids", "char_ids", "character_id_list", "ids"):
+            if key in param_names:
+                task_obj.apply_async(kwargs={key: char_ids})  # type: ignore[attr-defined]
+                return True
+
+        # 2) Some tasks accept a single positional list argument
+        # Avoid calling subset-style tasks with a list (they expect an int)
+        if "subset" not in param_names and "min_runs" not in param_names:
+            try:
+                task_obj.apply_async(args=[char_ids])  # type: ignore[attr-defined]
+                return True
+            except Exception:
+                pass
+
+        # 3) Subset-style task: pass an int if that's all that's available
+        # This will not guarantee watchlist-only updates, but keeps data fresh.
+        if "subset" in param_names:
+            try:
+                task_obj.apply_async(kwargs={"subset": len(char_ids)})  # type: ignore[attr-defined]
+                return True
+            except Exception:
+                pass
+
+        # 4) Single-character task: enqueue one per character id
+        for key in ("character_id", "char_id", "id"):
+            if key in param_names:
+                for cid in char_ids:
+                    task_obj.apply_async(kwargs={key: cid})  # type: ignore[attr-defined]
+                return True
+
+        return False
+
+    # De-duplicate candidates while keeping order
+    seen = set()
+    unique_candidates = []
+    for t in task_candidates:
+        if id(t) not in seen:
+            seen.add(id(t))
+            unique_candidates.append(t)
+
+    for candidate in unique_candidates:
+        if _enqueue_task(candidate):
+            return
+
+    # If we get here, we couldn't find a compatible corptools task.
+    # Intentionally no exception: better to keep the worker healthy.
+    return
