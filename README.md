@@ -2,12 +2,12 @@
 
 AllianceAuth plugin for tracking and alerting on capital ship activity (and other configured ship groups) across characters/accounts, with an operational dashboard, snoozing, and Discord notifications.
 
-Version: **v1.0.9b2**  
+Version: **v1.0.9b3**  
 Status: **Pre-release (beta)**
 
 ---
 
-## What’s new in v1.0.9b2 (highlights)
+## What’s new in v1.0.9b3 (highlights)
 
 - **Corptools 3.0.0b6 / eve_sde compatibility**
   - Updated lookups for **Type/Group** and **Region** ID fields under the new SDE-backed schema.
@@ -193,7 +193,7 @@ Only **one settings row** is expected.
 ## Background tasks
 
 CapTrack uses periodic tasks to refresh/watch data and drive alerts.  
-In **v1.0.9b2**, the “refresh watchlist assets” flow was updated to call **Corptools 3.x-compatible** update tasks (avoids Celery worker crashes caused by signature/parameter changes in Corptools).
+In **v1.0.9b3**, the “refresh watchlist assets” flow was updated to call **Corptools 3.x-compatible** update tasks (avoids Celery worker crashes caused by signature/parameter changes in Corptools).
 
 ---
 
@@ -222,7 +222,7 @@ Corptools migrations may refuse to apply if eve_sde data is stale (>24h).
 
 ## Versioning policy
 
-- **v1.0.9b2**: Beta/pre-release focusing on Corptools 3.x + SDE compatibility
+- **v1.0.9b3**: Beta/pre-release focusing on Corptools 3.x + SDE compatibility
 - Future versions will:
   - Avoid destructive migrations where possible
   - Prefer additive schema changes
