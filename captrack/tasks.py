@@ -236,4 +236,25 @@ def refresh_watchlist_assets():
             char_ids.append(cid)
 
     if char_ids:
-        update_subset_of_characters.apply_async(kwargs={"character_ids": char_ids})
+        # Corptools task signature differs between versions (and celery-once validates kwargs).
+        # We introspect the task's `run` signature and pass the correct kwarg,
+        # falling back to a single positional arg if needed.
+        try:
+            import inspect
+
+            run_fn = getattr(update_subset_of_characters, "run", update_subset_of_characters)
+            param_names = list(inspect.signature(run_fn).parameters.keys())
+        except Exception:
+            param_names = []
+
+        if "character_ids" in param_names:
+            update_subset_of_characters.apply_async(kwargs={"character_ids": char_ids})
+        elif "char_ids" in param_names:
+            update_subset_of_characters.apply_async(kwargs={"char_ids": char_ids})
+        elif "character_id_list" in param_names:
+            update_subset_of_characters.apply_async(kwargs={"character_id_list": char_ids})
+        elif "ids" in param_names:
+            update_subset_of_characters.apply_async(kwargs={"ids": char_ids})
+        else:
+            # Most implementations accept a single list argument (positional).
+            update_subset_of_characters.apply_async(args=[char_ids])
