@@ -286,6 +286,34 @@ def refresh_watchlist_assets():
     except Exception:
         ct_tasks = None  # noqa: F841
 
+
+    from celery import current_app
+
+    def _apply_task(task_obj: object, *, args: list | None = None, kwargs: dict | None = None):
+        """Enqueue a Celery task whether we have a Task object, a function, or a name."""
+        args = args or []
+        kwargs = kwargs or {}
+
+        # 1) Celery Task instance
+        if hasattr(task_obj, "apply_async"):
+            return task_obj.apply_async(args=args, kwargs=kwargs)  # type: ignore[attr-defined]
+
+        # 2) Explicit task name (some callables expose .name)
+        task_name = getattr(task_obj, "name", None)
+
+        # 3) Derive fully-qualified name from a plain function
+        if not task_name and callable(task_obj):
+            task_name = f"{getattr(task_obj, '__module__', '')}.{getattr(task_obj, '__name__', '')}".strip(".")
+
+        # 4) Resolve from Celery registry if possible
+        if task_name and task_name in current_app.tasks:
+            return current_app.tasks[task_name].apply_async(args=args, kwargs=kwargs)
+
+        # 5) Last resort: send_task by name
+        if task_name:
+            return current_app.send_task(task_name, args=args, kwargs=kwargs)
+
+        raise RuntimeError(f"Unable to enqueue task: {task_obj!r}")
     def _enqueue_task(task_obj: object) -> bool:
         """Try enqueueing a corptools task. Returns True if we scheduled it."""
         # Celery task objects (and celery-once) put the callable on .run
@@ -299,14 +327,14 @@ def refresh_watchlist_assets():
         # 1) Tasks that accept a list of IDs
         for key in ("character_ids", "char_ids", "character_id_list", "ids"):
             if key in param_names:
-                task_obj.apply_async(kwargs={key: char_ids})  # type: ignore[attr-defined]
+                _apply_task(task_obj, kwargs={key: char_ids})
                 return True
 
         # 2) Some tasks accept a single positional list argument
         # Avoid calling subset-style tasks with a list (they expect an int)
         if "subset" not in param_names and "min_runs" not in param_names:
             try:
-                task_obj.apply_async(args=[char_ids])  # type: ignore[attr-defined]
+                _apply_task(task_obj, args=[char_ids])
                 return True
             except Exception:
                 pass
@@ -315,7 +343,7 @@ def refresh_watchlist_assets():
         # This will not guarantee watchlist-only updates, but keeps data fresh.
         if "subset" in param_names:
             try:
-                task_obj.apply_async(kwargs={"subset": len(char_ids)})  # type: ignore[attr-defined]
+                _apply_task(task_obj, kwargs={"subset": len(char_ids)})
                 return True
             except Exception:
                 pass
@@ -324,7 +352,7 @@ def refresh_watchlist_assets():
         for key in ("character_id", "char_id", "id"):
             if key in param_names:
                 for cid in char_ids:
-                    task_obj.apply_async(kwargs={key: cid})  # type: ignore[attr-defined]
+                    _apply_task(task_obj, kwargs={key: cid})
                 return True
 
         return False
