@@ -251,6 +251,11 @@ def refresh_watchlist_assets():
     # Fallback to per-character updates if only single-character tasks exist.
     task_candidates: list[object] = []
 
+    # Corptools 3.0.0b7+: asset refresh task is a single-character task registered as "corptools.tasks.update_char_assets"
+    # We include task-name strings here so we can enqueue even if we only have names available.
+    task_candidates.append("corptools.tasks.update_char_assets")
+    task_candidates.append("corptools.tasks.update_characters")  # optional fallback if present
+
     # Newer corptools commonly exposes character tasks under corptools.tasks.character
     try:
         from corptools.tasks import character as ct_character  # type: ignore
@@ -260,6 +265,7 @@ def refresh_watchlist_assets():
             "update_characters",
             "update_character_assets_by_ids",
             "update_character_assets",
+            "update_char_assets",
             "update_characters_assets",
         ):
             if hasattr(ct_character, name):
@@ -276,6 +282,7 @@ def refresh_watchlist_assets():
             "update_characters",
             "update_character_assets_by_ids",
             "update_character_assets",
+            "update_char_assets",
             "update_characters_assets",
         ):
             if hasattr(ct_tasks, name):
@@ -293,6 +300,13 @@ def refresh_watchlist_assets():
         """Enqueue a Celery task whether we have a Task object, a function, or a name."""
         args = args or []
         kwargs = kwargs or {}
+
+        # If we were given a task name string, resolve via registry / send_task.
+        if isinstance(task_obj, str):
+            task_name = task_obj
+            if task_name in current_app.tasks:
+                return current_app.tasks[task_name].apply_async(args=args, kwargs=kwargs)
+            return current_app.send_task(task_name, args=args, kwargs=kwargs)
 
         # 1) Celery Task instance
         if hasattr(task_obj, "apply_async"):
