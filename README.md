@@ -2,12 +2,12 @@
 
 AllianceAuth plugin for tracking and alerting on capital ship activity (and other configured ship groups) across characters/accounts, with an operational dashboard, snoozing, and Discord notifications.
 
-Version: **v1.0.9b7**  
+Version: **v1.0.9b8**  
 Status: **Pre-release (beta)**
 
 ---
 
-## What’s new in v1.0.9b7 (highlights)
+## What’s new in v1.0.9b8 (highlights)
 **!!!NEW MERGE MIGRATION!!!**
 
 - **Corptools 3.x / eve_sde compatibility (b7 target)**

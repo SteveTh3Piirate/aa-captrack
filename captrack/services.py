@@ -111,7 +111,12 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         except CharacterOwnership.DoesNotExist:
             continue
 
-        ship_group_id = getattr(asset.type_name.group, "group_id", None)
+        # group id can be stored either on the related group model (id) or as group_id on ItemType depending on SDE schema
+        ship_group_id = (
+            getattr(asset.type_name, "group_id", None)
+            or getattr(getattr(asset.type_name, "group", None), "id", None)
+            or getattr(getattr(asset.type_name, "group", None), "group_id", None)
+        )
         ship_type_id = (
             getattr(asset.type_name, "eve_type_id", None)
             or getattr(asset.type_name, "type_id", None)
