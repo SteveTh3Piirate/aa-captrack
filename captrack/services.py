@@ -127,7 +127,9 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         except Exception:
             ship_group_id = None
 
-        if ship_group_id not in CAPITAL_GROUP_IDS:
+        group_name = getattr(group_obj, "name", None)
+
+        if not _is_capital_group(ship_group_id, group_name):
             continue
 
         # Resolve region id (constellation->region, or system.region)
@@ -183,8 +185,10 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
             or getattr(asset.type_name, "pk", None)
         )
 
-        alert_level = _risk_level_for_group_id(ship_group_id)
-        cap_class = _cap_class_for_group_id(ship_group_id)
+        group_name = getattr(group_obj, "name", None)
+
+        alert_level = _risk_level_for_group(ship_group_id, group_name)
+        cap_class = _cap_class_for_group(ship_group_id, group_name)
 
         system_obj = getattr(getattr(asset, "location_name", None), "system", None)
         const_obj = getattr(system_obj, "constellation", None) if system_obj else None
