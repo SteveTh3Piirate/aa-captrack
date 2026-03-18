@@ -4,7 +4,6 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from django.utils import timezone
-from django.core.exceptions import FieldError
 
 from corptools.models.assets import CharacterAsset
 from allianceauth.authentication.models import CharacterOwnership
@@ -74,8 +73,25 @@ def _should_alert(alert_level: str) -> bool:
 # Public service functions
 # ------------------------------------------------------------------
 def get_capitals_in_blacklisted_regions(blacklisted_regions):
-    region_ids = [getattr(r, "id", None) or getattr(r, "region_id", None) for r in blacklisted_regions]
-    region_ids = [rid for rid in region_ids if rid]
+    # Normalize blacklisted region IDs across schemas
+    def _eve_pk(obj, *names, default=None):
+        """Return the first non-None attribute from obj."""
+        if obj is None:
+            return default
+        for n in names:
+            try:
+                v = getattr(obj, n)
+            except Exception:
+                v = None
+            if v is not None:
+                return v
+        return default
+
+    region_ids = []
+    for r in blacklisted_regions:
+        rid = _eve_pk(r, "id", "region_id", "pk")
+        if rid is not None:
+            region_ids.append(int(rid))
 
     assets = (
         CharacterAsset.objects
@@ -91,25 +107,51 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         )
     )
 
-    # Filter capitals by ship group (schema differs between Corptools/SDE versions)
-    try:
-        assets = assets.filter(type_name__group_id__in=CAPITAL_GROUP_IDS)
-    except FieldError:
-        try:
-            assets = assets.filter(type_name__group__id__in=CAPITAL_GROUP_IDS)
-        except FieldError:
-            assets = assets.filter(type_name__group__group_id__in=CAPITAL_GROUP_IDS)
-
     filtered_assets: List[CharacterAsset] = []
-: List[CharacterAsset] = []
+
     for asset in assets:
-        if not asset.location_name or not asset.location_name.system:
+        # Must have a system location to map to region
+        system_obj = getattr(getattr(asset, "location_name", None), "system", None)
+        if not system_obj:
             continue
 
-        region = asset.location_name.system.constellation.region
-        region_pk = getattr(region, "id", None) or getattr(region, "region_id", None)
-        if region and getattr(region, 'id', None) in region_ids:
-            filtered_assets.append(asset)
+        # Resolve group id robustly (SDE schemas vary)
+        group_obj = getattr(asset.type_name, "group", None)
+        ship_group_id = (
+            getattr(asset.type_name, "group_id", None)
+            or getattr(group_obj, "group_id", None)
+            or getattr(group_obj, "pk", None)
+        )
+        try:
+            ship_group_id = int(ship_group_id) if ship_group_id is not None else None
+        except Exception:
+            ship_group_id = None
+
+        if ship_group_id not in CAPITAL_GROUP_IDS:
+            continue
+
+        # Resolve region id (constellation->region, or system.region)
+        region_obj = None
+        const_obj = getattr(system_obj, "constellation", None)
+        if const_obj is not None:
+            region_obj = getattr(const_obj, "region", None)
+        if region_obj is None:
+            region_obj = getattr(system_obj, "region", None)
+
+        region_pk = (
+            _eve_pk(region_obj, "id", "region_id", "pk")
+            or _eve_pk(const_obj, "region_id")
+            or _eve_pk(system_obj, "region_id")
+        )
+        try:
+            region_pk = int(region_pk) if region_pk is not None else None
+        except Exception:
+            region_pk = None
+
+        if region_pk is None or region_pk not in region_ids:
+            continue
+
+        filtered_assets.append(asset)
 
     output: List[Dict[str, Any]] = []
 
@@ -123,28 +165,39 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         except CharacterOwnership.DoesNotExist:
             continue
 
+        group_obj = getattr(asset.type_name, "group", None)
         ship_group_id = (
             getattr(asset.type_name, "group_id", None)
-            or getattr(getattr(asset.type_name, "group", None), "id", None)
-            or getattr(getattr(asset.type_name, "group", None), "group_id", None)
+            or getattr(group_obj, "group_id", None)
+            or getattr(group_obj, "pk", None)
         )
+        try:
+            ship_group_id = int(ship_group_id) if ship_group_id is not None else None
+        except Exception:
+            ship_group_id = None
+
         ship_type_id = (
             getattr(asset.type_name, "eve_type_id", None)
             or getattr(asset.type_name, "type_id", None)
+            or getattr(asset.type_name, "id", None)
+            or getattr(asset.type_name, "pk", None)
         )
 
         alert_level = _risk_level_for_group_id(ship_group_id)
         cap_class = _cap_class_for_group_id(ship_group_id)
 
-        system_obj = asset.location_name.system
-        region_obj = system_obj.constellation.region if system_obj else None
+        system_obj = getattr(getattr(asset, "location_name", None), "system", None)
+        const_obj = getattr(system_obj, "constellation", None) if system_obj else None
+        region_obj = getattr(const_obj, "region", None) if const_obj else None
+        if region_obj is None and system_obj is not None:
+            region_obj = getattr(system_obj, "region", None)
 
         system_name = getattr(system_obj, "name", "(Unknown)")
-        system_id = getattr(system_obj, "id", None) or getattr(system_obj, "system_id", None)
-        region_name = getattr(region_obj, "name", "(Unknown)")
-        region_id = getattr(region_obj, "id", None) or getattr(region_obj, "region_id", None)
+        system_id = _eve_pk(system_obj, "system_id", "id", "pk")
+        region_name = getattr(region_obj, "name", None) or getattr(region_obj, "region_name", None) or "(Unknown)"
+        region_id = _eve_pk(region_obj, "id", "region_id", "pk") or _eve_pk(const_obj, "region_id") or _eve_pk(system_obj, "region_id")
 
-        structure_name = asset.location_name.location_name or "(Unknown)"
+        structure_name = getattr(getattr(asset, "location_name", None), "location_name", None) or "(Unknown)"
         location_str = f"{region_name} → {system_name}"
 
         output.append({
@@ -156,8 +209,8 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
             "ship_type": asset.type_name.name,
             "ship_type_id": ship_type_id,
             "ship_group_id": ship_group_id,
-            "cap_class": cap_class,               # 👈 NEW
-            "risk": alert_level,                  # backward compat
+            "cap_class": cap_class,
+            "risk": alert_level,
             "alert_level": alert_level,
             "should_alert": _should_alert(alert_level),
             "region": region_name,
@@ -169,6 +222,7 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         })
 
     return output
+
 
 
 def touch_watchlist_last_seen(
