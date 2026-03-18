@@ -71,7 +71,11 @@ def _sde_system_region_map(system_ids: Sequence[int]) -> Dict[int, Tuple[Optiona
 def _resolve_region_info(asset: CharacterAsset) -> Tuple[Optional[int], Optional[str], Optional[str]]:
     """Return (region_id, region_name, system_name) for an asset."""
     loc = getattr(asset, "location_name", None)
-    system_obj = getattr(loc, "system", None) if loc else None
+    # Some Corptools installs may not have MapSystem rows for a location; accessing loc.system can raise DoesNotExist
+    try:
+        system_obj = getattr(loc, "system", None) if loc else None
+    except Exception:
+        system_obj = None
 
     # Prefer joined objects when present
     try:
