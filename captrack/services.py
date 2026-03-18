@@ -40,6 +40,17 @@ def _eve_pk(obj: Any, *attrs: str) -> Optional[int]:
     return None
 
 
+
+
+def _safe_getattr(obj: Any, attr: str, default: Any = None) -> Any:
+    """getattr that swallows broken/missing related-object lookups."""
+    if obj is None:
+        return default
+    try:
+        return getattr(obj, attr, default)
+    except Exception:
+        return default
+
 def _build_sde_capital_name_map() -> Tuple[Dict[str, int], Dict[str, int]]:
     """Return maps of capital hull name -> type_id and name -> group_id using eve_sde as source of truth.
 
@@ -128,8 +139,8 @@ def _resolve_ship_type_id(asset: "CharacterAsset") -> Optional[int]:
 
 def _resolve_system_id(asset: "CharacterAsset") -> Optional[int]:
     """Best-effort resolve solar system id across Corptools schema variants."""
-    location = getattr(asset, "location_name", None)
-    system = getattr(location, "system", None) if location is not None else None
+    location = _safe_getattr(asset, "location_name", None)
+    system = _safe_getattr(location, "system", None) if location is not None else None
 
     candidates = [
         getattr(asset, "system_id", None),
@@ -150,8 +161,8 @@ def _resolve_system_id(asset: "CharacterAsset") -> Optional[int]:
 
 def _resolve_region_info(asset: "CharacterAsset") -> Tuple[Optional[int], Optional[str], Optional[str]]:
     """Return (region_id, region_name, system_name) across Corptools/EVE SDE schema variants."""
-    location = getattr(asset, "location_name", None)
-    system = getattr(location, "system", None) if location is not None else None
+    location = _safe_getattr(asset, "location_name", None)
+    system = _safe_getattr(location, "system", None) if location is not None else None
     constellation = getattr(system, "constellation", None) if system is not None else None
     region = getattr(constellation, "region", None) if constellation is not None else None
 
