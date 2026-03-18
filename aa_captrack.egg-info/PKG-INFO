@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: aa-captrack
-Version: 1.0.9b8
+Version: 1.0.9b9
 Summary: Capital ship movement early warning plugin for AllianceAuth
 Home-page: https://github.com/SteveTh3Piirate/aa-captrack
 Author: SteveTh3Piirate
@@ -36,28 +36,25 @@ Dynamic: summary
 
 AllianceAuth plugin for tracking and alerting on capital ship activity (and other configured ship groups) across characters/accounts, with an operational dashboard, snoozing, and Discord notifications.
 
-Version: **v1.0.9b8**  
+Version: **v1.0.9b9**  
 Status: **Pre-release (beta)**
+**!!!NEW MERGE MIGRATION!!!**
 
 ---
 
-## What’s new in v1.0.9b8 (highlights)
-**!!!NEW MERGE MIGRATION!!!**
+## What’s new in v1.0.9b9 (highlights)
+- **Corptools 3.x compatibility (b7+)**
+  - Updated watchlist refresh enqueue logic to handle Corptools 3.x task API changes (signature-safe enqueue and b7 single-character asset refresh support).
+  - Worker task registration guidance for Corptools `tasks/` package so Celery can resolve Corptools task names reliably.
+- **Move Region blacklist to SDE**
+  - “Blacklisted Regions” now uses **`eve_sde.Region`** for region selection and matching on SDE-backed installs.
+- **SDE-safe type/group lookups**
+  - Fixed ItemType group filtering and group-id resolution under SDE schema (prevents dashboard errors and removes “UNKNOWN” alert levels).
+- **Dashboard UI parity restored**
+  - Restored card header features: **Audit** button, corp/alliance name + logos, and expanded snooze controls (including ∞ + Snooze-all).
+- **Migration graph cleanup**
+  - Added merge migration to resolve multiple-leaf migration conflicts introduced during the SDE migration work.
 
-- **Corptools 3.x / eve_sde compatibility (b7 target)**
-  - Updated lookups for **Type/Group** and **Region** ID fields under the SDE-backed schema.
-  - Watchlist asset refresh updated for Corptools 3.x task API changes (signature-safe enqueue + b7 single-character `update_char_assets` support).
-- **Move region blacklist to SDE**
-  - “Blacklisted Regions” now uses **`eve_sde.Region`** (instead of EveUniverse/legacy region models) so region search/autocomplete works on SDE-backed installs.
-- **Dashboard UX improvements**
-  - Card header includes **Main + Corporation + Alliance** names and **logos**.
-  - **Audit** button links to Corptools audit: `/audit/r/<character_id>/account/overview`
-  - **Snooze All** controls per card (1h / 6h / 24h / ∞ / clear)
-  - **Infinite snooze** option (until cleared)
-- **Discord improvements**
-  - Optional **role and/or user mentions** for alerts (safe `allowed_mentions` usage)
-
-  
 ---
 
 ## Overview
@@ -179,7 +176,7 @@ If you are running Corptools 3.x, you also need the SDE stack working:
 ### Install the plugin
 
 ```bash
-pip install aa-captrack==1.0.9b4
+pip install aa-captrack==1.0.9b9
 ```
 
 ### Add to `INSTALLED_APPS`
@@ -231,7 +228,7 @@ Only **one settings row** is expected.
 ## Background tasks
 
 CapTrack uses periodic tasks to refresh/watch data and drive alerts.  
-In **v1.0.9b4**, watchlist refresh was updated to handle Corptools 3.x task changes (celery-once signature validation, task name changes, and b7 single-character asset refresh).
+In **v1.0.9b9**, watchlist refresh is compatible with Corptools 3.x task changes (celery-once signature validation, task name changes, and b7 single-character asset refresh).  
 
 ---
 
@@ -262,7 +259,7 @@ CapTrack’s **Blacklisted Regions** feature also uses `eve_sde.Region`, so SDE 
 
 ## Versioning policy
 
-- **v1.0.9b4**: Beta/pre-release focusing on Corptools 3.x + SDE migration + region blacklist fixes
+- **v1.0.9b9**: Beta/pre-release focusing on Corptools 3.x task API changes + SDE migration + UI feature parity + migration merge
 - Future versions will:
   - Avoid destructive migrations where possible
   - Prefer additive schema changes

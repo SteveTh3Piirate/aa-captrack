@@ -2,13 +2,13 @@
 
 AllianceAuth plugin for tracking and alerting on capital ship activity (and other configured ship groups) across characters/accounts, with an operational dashboard, snoozing, and Discord notifications.
 
-Version: **v1.0.9b9**  
+Version: **v1.0.9b10**  
 Status: **Pre-release (beta)**
-**!!!NEW MERGE MIGRATION!!!**
+**!!!NEW MIGRATIONS!!!**
 
 ---
 
-## What’s new in v1.0.9b9 (highlights)
+## What’s new in v1.0.9b10 (highlights)
 - **Corptools 3.x compatibility (b7+)**
   - Updated watchlist refresh enqueue logic to handle Corptools 3.x task API changes (signature-safe enqueue and b7 single-character asset refresh support).
   - Worker task registration guidance for Corptools `tasks/` package so Celery can resolve Corptools task names reliably.
