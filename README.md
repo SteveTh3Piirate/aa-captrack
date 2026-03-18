@@ -7,7 +7,7 @@ Status: **Pre-release (beta)**
 
 ---
 
-## What’s new in v1.0.9b4 (highlights)
+## What’s new in v1.0.9b6 (highlights)
 
 - **Corptools 3.x / eve_sde compatibility (b7 target)**
   - Updated lookups for **Type/Group** and **Region** ID fields under the SDE-backed schema.
@@ -22,6 +22,7 @@ Status: **Pre-release (beta)**
 - **Discord improvements**
   - Optional **role and/or user mentions** for alerts (safe `allowed_mentions` usage)
 
+  !!!NEW MERGE MIGRATION!!!
 ---
 
 ## Overview
