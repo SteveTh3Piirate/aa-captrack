@@ -1,213 +1,15 @@
 ﻿from __future__ import annotations
 
-def _safe_int(value: Any) -> Optional[int]:
-    try:
-        return int(value) if value is not None else None
-    except Exception:
-        return None
-
-
-
-def _resolve_ship_type_id(asset: CharacterAsset) -> Optional[int]:
-    """Best-effort extract of EVE type_id for an asset's ship type across Corptools schema variants."""
-    t = getattr(asset, 'type_name', None)
-    if t is None:
-        return None
-    # Common direct fields
-    candidates = [
-        getattr(t, 'eve_type_id', None),
-        getattr(t, 'type_id', None),
-        getattr(t, 'id', None),
-        getattr(t, 'pk', None),
-        # Corptools 3.x Type model may link to an EVE/SDE item type via eveitemtype FK
-        getattr(t, 'eveitemtype_id', None),
-    ]
-    # Follow eveitemtype relation when present
-    eve_it = None
-    try:
-        eve_it = getattr(t, 'eveitemtype', None)
-    except Exception:
-        eve_it = None
-    if eve_it is not None:
-        candidates.extend([
-            getattr(eve_it, 'type_id', None),
-            getattr(eve_it, 'eve_type_id', None),
-            getattr(eve_it, 'id', None),
-            getattr(eve_it, 'pk', None),
-        ])
-    for c in candidates:
-        cid = _safe_int(c)
-        if cid:
-            return cid
-    return None
-
-def _resolve_system_id(asset: CharacterAsset) -> Optional[int]:
-    """Best-effort extract of solar system id from a CharacterAsset across Corptools schema variants."""
-    # 1) direct system relation
-    loc = getattr(asset, "location_name", None)
-    # Accessing loc.system can raise MapSystem.DoesNotExist on some installs; be defensive
-    try:
-        system_obj = getattr(loc, "system", None) if loc else None
-    except Exception:
-        system_obj = None
-    sid = (
-        getattr(system_obj, "system_id", None)
-        or getattr(system_obj, "id", None)
-        or getattr(system_obj, "pk", None)
-    )
-    sid = _safe_int(sid)
-    if sid:
-        return sid
-
-    # 2) raw fields on location or asset
-    for obj, names in (
-        (loc, ("system_id", "solar_system_id")),
-        (asset, ("system_id", "solar_system_id")),
-    ):
-        if obj is None:
-            continue
-        for n in names:
-            sid = _safe_int(getattr(obj, n, None))
-            if sid:
-                return sid
-
-    return None
-
-
-def _sde_system_region_map(system_ids: Sequence[int]) -> Dict[int, Tuple[Optional[int], Optional[str], Optional[str]]]:
-    """Return mapping: system_id -> (region_id, region_name, system_name) using eve_sde."""
-    if not system_ids or SDESolarSystem is None:
-        return {}
-
-    cache = getattr(_sde_system_region_map, "_cache", None)
-    if cache is None:
-        cache = {}
-        setattr(_sde_system_region_map, "_cache", cache)
-
-    missing = [sid for sid in system_ids if sid not in cache]
-    if missing:
-        try:
-            qs = SDESolarSystem.objects.filter(pk__in=missing).select_related("constellation", "constellation__region")
-        except Exception:
-            qs = SDESolarSystem.objects.filter(pk__in=missing)
-        for ss in qs:
-            region_obj = None
-            try:
-                const = getattr(ss, "constellation", None)
-                region_obj = getattr(const, "region", None) if const else None
-            except Exception:
-                region_obj = None
-
-            rid = _safe_int(getattr(region_obj, "id", None) or getattr(region_obj, "region_id", None) or getattr(ss, "region_id", None))
-            rname = getattr(region_obj, "name", None) if region_obj is not None else None
-            sname = getattr(ss, "name", None)
-            cache[_safe_int(getattr(ss, "id", None) or getattr(ss, "system_id", None) or getattr(ss, "pk", None)) or ss.pk] = (rid, rname, sname)
-
-    return {sid: cache.get(sid, (None, None, None)) for sid in system_ids}
-
-
-def _resolve_region_info(asset: CharacterAsset) -> Tuple[Optional[int], Optional[str], Optional[str]]:
-    """Return (region_id, region_name, system_name) for an asset."""
-    loc = getattr(asset, "location_name", None)
-    # Some Corptools installs may not have MapSystem rows for a location; accessing loc.system can raise DoesNotExist
-    try:
-        system_obj = getattr(loc, "system", None) if loc else None
-    except Exception:
-        system_obj = None
-
-    # Prefer joined objects when present
-    try:
-        const_obj = getattr(system_obj, "constellation", None) if system_obj else None
-        region_obj = getattr(const_obj, "region", None) if const_obj else None
-        if region_obj is None and system_obj is not None:
-            region_obj = getattr(system_obj, "region", None)
-    except Exception:
-        region_obj = None
-
-    rid = _safe_int(
-        (getattr(region_obj, "id", None) if region_obj else None)
-        or (getattr(region_obj, "region_id", None) if region_obj else None)
-        or (getattr(const_obj, "region_id", None) if const_obj else None)
-        or (getattr(system_obj, "region_id", None) if system_obj else None)
-    )
-    rname = None
-    if region_obj is not None:
-        rname = getattr(region_obj, "name", None) or getattr(region_obj, "region_name", None)
-
-    sname = getattr(system_obj, "name", None) if system_obj is not None else None
-
-    # Fallback to eve_sde system->region if needed
-    if rid is None:
-        sid = _resolve_system_id(asset)
-        if sid is not None:
-            m = _sde_system_region_map([sid]).get(sid)
-            if m:
-                rid = m[0] or rid
-                rname = m[1] or rname
-                sname = m[2] or sname
-
-    return rid, rname, sname
-
-
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from django.utils import timezone
+from django.core.exceptions import FieldError
 
 from corptools.models.assets import CharacterAsset
 from allianceauth.authentication.models import CharacterOwnership
 
 from .models import CapWatchlist
-
-# Optional: use eve_sde canonical type->group mapping when Corptools' group IDs/names differ.
-try:
-    from eve_sde.models import ItemType as SDEItemType  # type: ignore
-except Exception:  # pragma: no cover
-    SDEItemType = None  # type: ignore
-
-# Optional: use eve_sde canonical system->region mapping when Corptools location relations are missing.
-try:
-    from eve_sde.models import SolarSystem as SDESolarSystem  # type: ignore
-except Exception:  # pragma: no cover
-    SDESolarSystem = None  # type: ignore
-
-
-def _build_sde_type_group_map(type_ids: Sequence[int]) -> Dict[int, Tuple[Optional[int], Optional[str]]]:
-    """Return mapping: type_id -> (canonical_group_id, canonical_group_name).
-
-    Uses eve_sde as source of truth. Falls back gracefully if eve_sde is unavailable.
-    """
-    if not type_ids or SDEItemType is None:
-        return {}
-
-    # Cache by set of ids is expensive; cache the full map per process once and reuse.
-    cache = getattr(_build_sde_type_group_map, "_cache", None)
-    if cache is None:
-        cache = {}
-        setattr(_build_sde_type_group_map, "_cache", cache)
-
-    missing = [tid for tid in type_ids if tid not in cache]
-    if missing:
-        try:
-            qs = SDEItemType.objects.filter(pk__in=missing).select_related("group")
-        except Exception:
-            qs = SDEItemType.objects.filter(pk__in=missing)
-        for it in qs:
-            grp = getattr(it, "group", None)
-            gid = (
-                getattr(it, "group_id", None)
-                or getattr(grp, "group_id", None)
-                or getattr(grp, "id", None)
-                or getattr(grp, "pk", None)
-            )
-            try:
-                gid_int = int(gid) if gid is not None else None
-            except Exception:
-                gid_int = None
-            gname = getattr(grp, "name", None)
-            cache[int(getattr(it, "pk"))] = (gid_int, gname)
-
-    return {tid: cache.get(tid, (None, None)) for tid in type_ids}
 
 # Capital ship group IDs (T1 + faction variants live in same groups)
 CAPITAL_GROUP_IDS: List[int] = [
@@ -220,43 +22,57 @@ CAPITAL_GROUP_IDS: List[int] = [
     883,   # Capital Industrial Ships (Rorqual)
 ]
 
+def _build_sde_capital_name_map() -> Tuple[Dict[str, int], Dict[str, int]]:
+    """Return maps of capital hull name -> type_id and name -> group_id using eve_sde as source of truth.
 
-
-
-# Fallback keywords to discover/identify capital ship groups when group IDs differ across schemas
-_CAPITAL_GROUP_NAME_KEYWORDS = [
-    "titan",
-    "supercarrier",
-    "carrier",
-    "dreadnought",
-    "lancer dreadnought",
-    "force auxiliary",
-    "capital industrial",
-    "rorqual",
-]
-
-def _discover_capital_group_ids() -> List[int]:
-    """Discover capital group IDs from the DB by group name."""
+    Keys are casefolded hull names. This avoids relying on Corptools internal ids which can vary across versions.
+    """
     try:
-        TypeModel = CharacterAsset._meta.get_field("type_name").related_model
-        GroupModel = TypeModel._meta.get_field("group").related_model
-        from django.db.models import Q
+        from eve_sde.models import ItemType  # type: ignore
     except Exception:
-        return []
+        return {}, {}
 
     try:
-        pk_name = GroupModel._meta.pk.name
+        qs = ItemType.objects.filter(group_id__in=CAPITAL_GROUP_IDS).values_list("id", "name", "group_id")
     except Exception:
-        pk_name = "pk"
+        return {}, {}
 
-    q = Q()
-    for kw in _CAPITAL_GROUP_NAME_KEYWORDS:
-        q |= Q(name__icontains=kw)
+    name_to_type: Dict[str, int] = {}
+    name_to_group: Dict[str, int] = {}
+    for type_id, name, group_id in qs:
+        if not name:
+            continue
+        key = str(name).casefold()
+        try:
+            name_to_type[key] = int(type_id)
+        except Exception:
+            continue
+        try:
+            name_to_group[key] = int(group_id)
+        except Exception:
+            name_to_group[key] = 0
+    return name_to_type, name_to_group
 
-    try:
-        return [int(x) for x in GroupModel.objects.filter(q).values_list(pk_name, flat=True).distinct()]
-    except Exception:
-        return []
+
+def _resolve_asset_hull_name(asset: "CharacterAsset") -> Optional[str]:
+    """Best-effort resolve hull name for an asset across Corptools schema variants."""
+    t = getattr(asset, "type_name", None)
+    candidates: List[Any] = []
+    if t is not None:
+        candidates.extend([getattr(t, "name", None), getattr(t, "type_name", None), getattr(t, "item_name", None)])
+        try:
+            eit = getattr(t, "eveitemtype", None)
+        except Exception:
+            eit = None
+        if eit is not None:
+            candidates.extend([getattr(eit, "name", None), getattr(eit, "type_name", None), getattr(eit, "item_name", None)])
+    for c in candidates:
+        if c:
+            return str(c)
+    return None
+
+
+
 # ------------------------------------------------------------------
 # Classification helpers
 # ------------------------------------------------------------------
@@ -304,103 +120,30 @@ def _should_alert(alert_level: str) -> bool:
     return alert_level in {"critical", "high", "medium"}
 
 
-def _normalize_group_name(group_name: Optional[str]) -> str:
-    return (group_name or "").strip().lower()
-
-
-def _is_capital_group(group_id: Optional[int], group_name: Optional[str]) -> bool:
-    """Return True if the group represents a capital class we track.
-
-    Works across schema variants by checking:
-    - canonical EVE group IDs
-    - discovered group PKs from DB (name-based discovery)
-    - group name keywords (fallback)
-    """
-    try:
-        gid = int(group_id) if group_id is not None else None
-    except Exception:
-        gid = None
-
-    if gid in CAPITAL_GROUP_IDS:
-        return True
-
-    # name-keyword fallback
-    name = _normalize_group_name(group_name)
-    if any(kw in name for kw in _CAPITAL_GROUP_NAME_KEYWORDS):
-        return True
-
-    # last resort: discovered IDs (if group PKs are not canonical)
-    discovered = getattr(_is_capital_group, "_discovered_ids", None)
-    if discovered is None:
-        discovered = set(_discover_capital_group_ids())
-        setattr(_is_capital_group, "_discovered_ids", discovered)
-
-    return gid in discovered if gid is not None else False
-
-
-def _cap_class_for_group(group_id: Optional[int], group_name: Optional[str]) -> str:
-    """Return normalized class string for policy logic."""
-    name = _normalize_group_name(group_name)
-
-    # Prefer explicit name match (works even if numeric IDs are non-canonical)
-    if "titan" in name or "supercarrier" in name:
-        return "supercapital"
-    if "lancer dreadnought" in name or ("dreadnought" in name):
-        return "dreadnought"
-    # order matters: check supercarrier before carrier substring
-    if "force auxiliary" in name:
-        return "fax"
-    if "carrier" in name:
-        return "carrier"
-    if "capital industrial" in name or "rorqual" in name:
-        return "industrial"
-
-    # Fallback to canonical ID mapping
-    return _cap_class_for_group_id(group_id)
-
-
-def _risk_level_for_group(group_id: Optional[int], group_name: Optional[str]) -> str:
-    """Severity classification (UI + alert styling) with name fallback."""
-    name = _normalize_group_name(group_name)
-
-    if "titan" in name or "supercarrier" in name:
-        return "critical"
-    if "lancer dreadnought" in name or ("dreadnought" in name):
-        return "high"
-    if "force auxiliary" in name:
-        return "medium"
-    # carrier, but avoid supercarrier (handled above)
-    if "carrier" in name:
-        return "medium"
-    if "capital industrial" in name or "rorqual" in name:
-        return "industrial"
-
-    return _risk_level_for_group_id(group_id)
-
-
 # ------------------------------------------------------------------
 # Public service functions
 # ------------------------------------------------------------------
-def get_capitals_in_blacklisted_regions(blacklisted_regions):
-    # Normalize blacklisted region IDs across schemas
-    def _eve_pk(obj, *names, default=None):
-        """Return the first non-None attribute from obj."""
-        if obj is None:
-            return default
-        for n in names:
-            try:
-                v = getattr(obj, n)
-            except Exception:
-                v = None
-            if v is not None:
-                return v
-        return default
+def get_capitals_in_blacklisted_regions(blacklisted_regions: Sequence[Any]) -> List[Dict[str, Any]]:
+    """Return capital assets located in the given blacklisted regions.
 
-    region_ids = []
+    Robust across Corptools 3.x schema variants by:
+    - resolving regions via eve_sde (fallbacks when Corptools map tables are incomplete)
+    - classifying capitals using eve_sde ItemType group_id by hull name (not Corptools internal ids)
+    """
+    region_ids: List[int] = []
     for r in blacklisted_regions:
         rid = _eve_pk(r, "id", "region_id", "pk")
-        if rid is not None:
+        if rid is None:
+            continue
+        try:
             region_ids.append(int(rid))
+        except Exception:
+            continue
+
+    if not region_ids:
+        return []
+
+    cap_name_to_type_id, cap_name_to_group_id = _build_sde_capital_name_map()
 
     assets = (
         CharacterAsset.objects
@@ -410,101 +153,52 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
             "type_name",
             "location_name",
         )
+        .all()
     )
-
-    filtered_assets: List[CharacterAsset] = []
-
-    for asset in assets:
-        # Resolve region/system information (works across schema variants)
-        region_pk, _region_name, _system_name = _resolve_region_info(asset)
-        if region_pk is None:
-            continue
-        # Resolve ship type + canonical group via eve_sde when available
-        ship_type_id_int = _resolve_ship_type_id(asset)
-        
-
-        group_obj = getattr(asset.type_name, "group", None)
-
-        ship_group_id = None
-        group_name = None
-
-        if ship_type_id_int is not None:
-            sde_map = _build_sde_type_group_map([ship_type_id_int])
-            ship_group_id, group_name = sde_map.get(ship_type_id_int, (None, None))
-
-        # Fallback to Corptools group fields if SDE mapping not available
-        if ship_group_id is None:
-            ship_group_id = (
-                getattr(asset.type_name, "group_id", None)
-                or getattr(group_obj, "group_id", None)
-                or getattr(group_obj, "pk", None)
-            )
-            try:
-                ship_group_id = int(ship_group_id) if ship_group_id is not None else None
-            except Exception:
-                ship_group_id = None
-
-        if group_name is None:
-            group_name = getattr(group_obj, "name", None)
-
-        if not _is_capital_group(ship_group_id, group_name):
-            continue
-
-                # Filter to blacklisted regions
-        if region_pk not in region_ids:
-            continue
-        filtered_assets.append(asset)
 
     output: List[Dict[str, Any]] = []
 
-    # Build a canonical type->group map from eve_sde for all filtered assets (best-effort)
-    _type_ids: List[int] = []
-    for _a in filtered_assets:
-        _tid = _resolve_ship_type_id(_a)
+    for asset in assets:
+        region_id, region_name, system_name_fallback = _resolve_region_info(asset)
+        if region_id is None:
+            continue
         try:
-            if _tid is not None:
-                _type_ids.append(int(_tid))
+            region_id_int = int(region_id)
         except Exception:
-            pass
-    _sde_type_group = _build_sde_type_group_map(list(set(_type_ids)))
+            continue
+        if region_id_int not in region_ids:
+            continue
 
-    for asset in filtered_assets:
-        char_id = asset.character.character.character_id
+        hull_name = _resolve_asset_hull_name(asset) or getattr(getattr(asset, "type_name", None), "name", None)
+        if not hull_name:
+            continue
+        key = str(hull_name).casefold()
+
+        ship_group_id = cap_name_to_group_id.get(key)
+        if ship_group_id not in CAPITAL_GROUP_IDS:
+            continue
+
+        ship_type_id_int = cap_name_to_type_id.get(key) or _resolve_ship_type_id(asset)
+
+        # resolve character id
+        char_id = None
+        try:
+            char_id = asset.character.character.character_id
+        except Exception:
+            try:
+                char_id = asset.character.character_id
+            except Exception:
+                char_id = None
+        if char_id is None:
+            continue
 
         try:
-            ownership = CharacterOwnership.objects.get(
-                character__character_id=char_id
-            )
+            ownership = CharacterOwnership.objects.get(character__character_id=char_id)
         except CharacterOwnership.DoesNotExist:
             continue
 
-        ship_type_id_int = _resolve_ship_type_id(asset)
-        
-
-        group_obj = getattr(asset.type_name, "group", None)
-
-        ship_group_id = None
-        group_name = None
-
-        if ship_type_id_int is not None:
-            ship_group_id, group_name = _sde_type_group.get(ship_type_id_int, (None, None))
-
-        if ship_group_id is None:
-            ship_group_id = (
-                getattr(asset.type_name, "group_id", None)
-                or getattr(group_obj, "group_id", None)
-                or getattr(group_obj, "pk", None)
-            )
-            try:
-                ship_group_id = int(ship_group_id) if ship_group_id is not None else None
-            except Exception:
-                ship_group_id = None
-
-        if group_name is None:
-            group_name = getattr(group_obj, "name", None)
-
-        alert_level = _risk_level_for_group(ship_group_id, group_name)
-        cap_class = _cap_class_for_group(ship_group_id, group_name)
+        alert_level = _risk_level_for_group(ship_group_id, None)
+        cap_class = _cap_class_for_group(ship_group_id, None)
 
         try:
             system_obj = getattr(getattr(asset, "location_name", None), "system", None)
@@ -512,7 +206,6 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
             system_obj = None
         system_id = _eve_pk(system_obj, "system_id", "id", "pk") or _resolve_system_id(asset)
 
-        region_id, region_name, system_name_fallback = _resolve_region_info(asset)
         system_name = getattr(system_obj, "name", None) or system_name_fallback or "(Unknown)"
         region_name = region_name or "(Unknown)"
 
@@ -522,10 +215,8 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         output.append({
             "ownership": ownership,
             "character_id": char_id,
-            "character_name": getattr(
-                ownership.character, "character_name", str(char_id)
-            ),
-            "ship_type": asset.type_name.name,
+            "character_name": getattr(ownership.character, "character_name", str(char_id)),
+            "ship_type": str(hull_name),
             "ship_type_id": ship_type_id_int,
             "ship_group_id": ship_group_id,
             "cap_class": cap_class,
@@ -533,7 +224,7 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
             "alert_level": alert_level,
             "should_alert": _should_alert(alert_level),
             "region": region_name,
-            "region_id": region_id,
+            "region_id": region_id_int,
             "system": system_name,
             "system_id": system_id,
             "structure": structure_name,
@@ -541,7 +232,6 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         })
 
     return output
-
 
 
 def touch_watchlist_last_seen(
