@@ -2,7 +2,7 @@
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from eveuniverse.models import EveRegion
+from eve_sde.models import Region
 import requests
 
 
@@ -14,7 +14,7 @@ class CapTrackSettings(models.Model):
     id = models.BigAutoField(primary_key=True)
 
     blacklisted_regions = models.ManyToManyField(
-        EveRegion,
+        Region,
         blank=True,
         help_text="Select regions to blacklist for capital tracking."
     )
