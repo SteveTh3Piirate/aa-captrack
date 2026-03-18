@@ -1,13 +1,47 @@
+Metadata-Version: 2.4
+Name: aa-captrack
+Version: 1.0.9b5
+Summary: Capital ship movement early warning plugin for AllianceAuth
+Home-page: https://github.com/SteveTh3Piirate/aa-captrack
+Author: SteveTh3Piirate
+License: MIT
+Project-URL: Source, https://github.com/SteveTh3Piirate/aa-captrack
+Project-URL: Issues, https://github.com/SteveTh3Piirate/aa-captrack/issues
+Classifier: Framework :: Django
+Classifier: Framework :: Django :: 4.2
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: allianceauth<5.0.0a5,>4.0
+Requires-Dist: allianceauth-corptools<=3.0.0b8,>=2.15.2
+Requires-Dist: requests>=2.0
+Dynamic: author
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: license
+Dynamic: license-file
+Dynamic: project-url
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
 ﻿# aa-captrack
 
 AllianceAuth plugin for tracking and alerting on capital ship activity (and other configured ship groups) across characters/accounts, with an operational dashboard, snoozing, and Discord notifications.
 
-Version: **v1.0.9b4.1**  
+Version: **v1.0.9b5**  
 Status: **Pre-release (beta)**
 
 ---
 
-## What’s new in v1.0.9b4.1 (highlights)
+## What’s new in v1.0.9b5 (highlights)
 
 - **Corptools 3.x / eve_sde compatibility (b8 target)**
   - Updated lookups for **Type/Group** and **Region** ID fields under the SDE-backed schema.
