@@ -1,10 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from django.utils import timezone
-from django.core.exceptions import FieldError
 
 from corptools.models.assets import CharacterAsset
 from allianceauth.authentication.models import CharacterOwnership
@@ -21,6 +20,25 @@ CAPITAL_GROUP_IDS: List[int] = [
     1538,  # Force Auxiliaries
     883,   # Capital Industrial Ships (Rorqual)
 ]
+
+
+def _eve_pk(obj: Any, *attrs: str) -> Optional[int]:
+    """Return the first usable integer-ish primary key from a list of attrs."""
+    if obj is None:
+        return None
+    for attr in attrs:
+        try:
+            value = getattr(obj, attr, None)
+        except Exception:
+            value = None
+        if value in (None, ""):
+            continue
+        try:
+            return int(value)
+        except Exception:
+            continue
+    return None
+
 
 def _build_sde_capital_name_map() -> Tuple[Dict[str, int], Dict[str, int]]:
     """Return maps of capital hull name -> type_id and name -> group_id using eve_sde as source of truth.
@@ -59,27 +77,130 @@ def _resolve_asset_hull_name(asset: "CharacterAsset") -> Optional[str]:
     t = getattr(asset, "type_name", None)
     candidates: List[Any] = []
     if t is not None:
-        candidates.extend([getattr(t, "name", None), getattr(t, "type_name", None), getattr(t, "item_name", None)])
+        candidates.extend([
+            getattr(t, "name", None),
+            getattr(t, "type_name", None),
+            getattr(t, "item_name", None),
+        ])
         try:
             eit = getattr(t, "eveitemtype", None)
         except Exception:
             eit = None
         if eit is not None:
-            candidates.extend([getattr(eit, "name", None), getattr(eit, "type_name", None), getattr(eit, "item_name", None)])
+            candidates.extend([
+                getattr(eit, "name", None),
+                getattr(eit, "type_name", None),
+                getattr(eit, "item_name", None),
+            ])
     for c in candidates:
         if c:
             return str(c)
     return None
 
 
+def _resolve_ship_type_id(asset: "CharacterAsset") -> Optional[int]:
+    """Best-effort resolve EVE ship type id across Corptools schema variants."""
+    t = getattr(asset, "type_name", None)
+    candidates = [
+        getattr(asset, "type_id", None),
+        getattr(t, "type_id", None),
+        getattr(t, "id", None),
+    ]
+    try:
+        eit = getattr(t, "eveitemtype", None)
+    except Exception:
+        eit = None
+    if eit is not None:
+        candidates.extend([
+            getattr(eit, "type_id", None),
+            getattr(eit, "id", None),
+        ])
+
+    for value in candidates:
+        if value in (None, ""):
+            continue
+        try:
+            return int(value)
+        except Exception:
+            continue
+    return None
+
+
+def _resolve_system_id(asset: "CharacterAsset") -> Optional[int]:
+    """Best-effort resolve solar system id across Corptools schema variants."""
+    location = getattr(asset, "location_name", None)
+    system = getattr(location, "system", None) if location is not None else None
+
+    candidates = [
+        getattr(asset, "system_id", None),
+        getattr(location, "system_id", None) if location is not None else None,
+        getattr(system, "system_id", None) if system is not None else None,
+        getattr(system, "id", None) if system is not None else None,
+        getattr(system, "pk", None) if system is not None else None,
+    ]
+    for value in candidates:
+        if value in (None, ""):
+            continue
+        try:
+            return int(value)
+        except Exception:
+            continue
+    return None
+
+
+def _resolve_region_info(asset: "CharacterAsset") -> Tuple[Optional[int], Optional[str], Optional[str]]:
+    """Return (region_id, region_name, system_name) across Corptools/EVE SDE schema variants."""
+    location = getattr(asset, "location_name", None)
+    system = getattr(location, "system", None) if location is not None else None
+    constellation = getattr(system, "constellation", None) if system is not None else None
+    region = getattr(constellation, "region", None) if constellation is not None else None
+
+    region_id = _eve_pk(region, "region_id", "id", "pk")
+    region_name = getattr(region, "name", None)
+    system_name = getattr(system, "name", None)
+
+    if region_id is not None:
+        return region_id, region_name, system_name
+
+    system_id = _resolve_system_id(asset)
+    if system_id is None:
+        return None, None, system_name
+
+    try:
+        from eve_sde.models import SolarSystem  # type: ignore
+    except Exception:
+        return None, None, system_name
+
+    try:
+        s = (
+            SolarSystem.objects
+            .select_related("constellation__region")
+            .filter(system_id=system_id)
+            .first()
+        )
+    except Exception:
+        s = None
+
+    if not s:
+        return None, None, system_name
+
+    try:
+        region_obj = s.constellation.region
+    except Exception:
+        region_obj = None
+
+    return (
+        _eve_pk(region_obj, "region_id", "id", "pk"),
+        getattr(region_obj, "name", None),
+        getattr(s, "name", None) or system_name,
+    )
+
 
 # ------------------------------------------------------------------
 # Classification helpers
 # ------------------------------------------------------------------
 def _cap_class_for_group_id(group_id: Optional[int]) -> str:
-    """
-    Returns a normalized capital class string for policy logic.
-    """
+    """Returns a normalized capital class string for policy logic."""
     if group_id in (30, 659):
         return "supercapital"
     if group_id in (485, 1972):
@@ -94,14 +215,7 @@ def _cap_class_for_group_id(group_id: Optional[int]) -> str:
 
 
 def _risk_level_for_group_id(group_id: Optional[int]) -> str:
-    """
-    Severity classification (UI + alert styling).
-
-    - critical: Titans, Supercarriers
-    - high: Dreadnoughts, Lancer Dreadnoughts
-    - medium: Carriers, Force Auxiliaries
-    - industrial: Capital Industrials
-    """
+    """Severity classification (UI + alert styling)."""
     if group_id in (30, 659):
         return "critical"
     if group_id in (485, 1972):
@@ -114,9 +228,7 @@ def _risk_level_for_group_id(group_id: Optional[int]) -> str:
 
 
 def _should_alert(alert_level: str) -> bool:
-    """
-    Default alertability (overridden later by policy logic).
-    """
+    """Default alertability (overridden later by policy logic)."""
     return alert_level in {"critical", "high", "medium"}
 
 
@@ -197,8 +309,8 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions: Sequence[Any]) -> L
         except CharacterOwnership.DoesNotExist:
             continue
 
-        alert_level = _risk_level_for_group(ship_group_id, None)
-        cap_class = _cap_class_for_group(ship_group_id, None)
+        alert_level = _risk_level_for_group_id(ship_group_id)
+        cap_class = _cap_class_for_group_id(ship_group_id)
 
         try:
             system_obj = getattr(getattr(asset, "location_name", None), "system", None)
