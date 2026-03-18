@@ -87,7 +87,7 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
             "location_name__system__constellation",
             "location_name__system__constellation__region",
         )
-        .filter(type_name__group__group_id__in=CAPITAL_GROUP_IDS)
+        .filter(type_name__group_id__in=CAPITAL_GROUP_IDS)
     )
 
     filtered_assets: List[CharacterAsset] = []
