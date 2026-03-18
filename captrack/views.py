@@ -3,6 +3,8 @@ from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required, permission_required
 from django.shortcuts import render
+
+from allianceauth.eveonline.models import EveAllianceInfo, EveCorporationInfo
 from django.utils import timezone
 
 from .constants import CAPTRACK_BASIC_ACCESS_PERM
@@ -40,25 +42,52 @@ def _supercap_priority(ship_group_id) -> int:
 def dashboard(request):
     now = timezone.now()
 
-    # Snooze handling (unchanged)
+    # Snooze handling (single row + bulk "snooze all")
     if request.method == "POST":
+        snooze_action = (request.POST.get("snooze_action") or "").lower()
+
+        def _snooze_until(action: str):
+            if action == "clear":
+                return None
+            if action == "1h":
+                return now + timedelta(hours=1)
+            if action == "6h":
+                return now + timedelta(hours=6)
+            if action == "24h":
+                return now + timedelta(hours=24)
+            # "Infinite" snooze: far-future timestamp (no migration required)
+            if action in {"inf", "infinite", "forever", "∞"}:
+                return now + timedelta(days=3650)  # ~10 years
+            return None
+
+        # Bulk snooze: expects comma-separated watchlist IDs
+        watchlist_ids_raw = request.POST.get("watchlist_ids")
+        if watchlist_ids_raw and snooze_action:
+            ids = []
+            for part in watchlist_ids_raw.split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                try:
+                    ids.append(int(part))
+                except (ValueError, TypeError):
+                    continue
+
+            if ids:
+                CapWatchlist.objects.filter(pk__in=ids).update(
+                    alert_snoozed_until=_snooze_until(snooze_action)
+                )
+
+        # Single row snooze
         watchlist_id = request.POST.get("watchlist_id")
-        snooze_action = request.POST.get("snooze_action")
-        if watchlist_id and snooze_action:
+        if watchlist_id and snooze_action and not watchlist_ids_raw:
             try:
                 wl = CapWatchlist.objects.get(pk=int(watchlist_id))
             except (CapWatchlist.DoesNotExist, ValueError, TypeError):
                 wl = None
 
             if wl:
-                if snooze_action == "clear":
-                    wl.alert_snoozed_until = None
-                elif snooze_action == "1h":
-                    wl.alert_snoozed_until = now + timedelta(hours=1)
-                elif snooze_action == "6h":
-                    wl.alert_snoozed_until = now + timedelta(hours=6)
-                elif snooze_action == "24h":
-                    wl.alert_snoozed_until = now + timedelta(hours=24)
+                wl.alert_snoozed_until = _snooze_until(snooze_action)
                 wl.save(update_fields=["alert_snoozed_until"])
 
     settings = CapTrackSettings.objects.first()
@@ -126,6 +155,61 @@ def dashboard(request):
             "low" if "low" in all_levels else
             "industrial" if "industrial" in all_levels else
             "unknown"
+        )
+
+        # ------------------------------------------------------------------
+        # UI helpers for the dashboard template
+        # ------------------------------------------------------------------
+        main = group.get("main")
+        main_character_id = getattr(main, "character_id", None) or getattr(main, "pk", None)
+        group["main_character_id"] = main_character_id
+
+        # Corptools audit URL (relative; will inherit current site domain)
+        if main_character_id:
+            group["audit_url"] = f"/audit/r/{main_character_id}/account/overview"
+        else:
+            group["audit_url"] = None
+
+        # Bulk snooze: unique watchlist ids in this card
+        wl_ids = sorted({e.get("watchlist_id") for e in entries if e.get("watchlist_id")})
+        group["watchlist_ids_str"] = ",".join(str(i) for i in wl_ids)
+
+        # Corporation / alliance info (names + logo urls)
+        # IMPORTANT: Don't touch Character.corporation / Character.alliance properties here.
+        # Those properties can raise Eve*Info.DoesNotExist if the info tables haven't been
+        # hydrated yet. Instead, query EveCorporationInfo / EveAllianceInfo with filter().first().
+
+        corp_id = getattr(main, "corporation_id", None) or None
+        if corp_id == 0:
+            corp_id = None
+        corp_name = getattr(main, "corporation_name", None)
+
+        corp_obj = None
+        if corp_id:
+            corp_obj = EveCorporationInfo.objects.filter(corporation_id=corp_id).first()
+            if corp_obj:
+                corp_name = corp_name or getattr(corp_obj, "corporation_name", None) or getattr(corp_obj, "name", None)
+
+        alliance_id = getattr(main, "alliance_id", None) or None
+        if alliance_id == 0:
+            alliance_id = None
+        alliance_name = getattr(main, "alliance_name", None)
+
+        alliance_obj = None
+        if alliance_id:
+            alliance_obj = EveAllianceInfo.objects.filter(alliance_id=alliance_id).first()
+            if alliance_obj:
+                alliance_name = alliance_name or getattr(alliance_obj, "alliance_name", None) or getattr(alliance_obj, "name", None)
+
+        group["corp_id"] = corp_id
+        group["corp_name"] = corp_name
+        group["corp_logo_url"] = (
+            f"https://images.evetech.net/corporations/{corp_id}/logo?size=32" if corp_id else None
+        )
+        group["alliance_id"] = alliance_id
+        group["alliance_name"] = alliance_name
+        group["alliance_logo_url"] = (
+            f"https://images.evetech.net/alliances/{alliance_id}/logo?size=32" if alliance_id else None
         )
 
     groups.sort(

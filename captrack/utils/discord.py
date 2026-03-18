@@ -207,7 +207,13 @@ def build_captrack_main_embed(
     return embed
 
 
-def send_discord_webhook(url: str, *, content: Optional[str] = None, embeds: Optional[list[dict]] = None) -> bool:
+def send_discord_webhook(
+    url: str,
+    *,
+    content: Optional[str] = None,
+    embeds: Optional[list[dict]] = None,
+    allowed_mentions: Optional[dict] = None,
+) -> bool:
     if not url:
         return False
 
@@ -216,9 +222,56 @@ def send_discord_webhook(url: str, *, content: Optional[str] = None, embeds: Opt
         payload["content"] = content
     if embeds:
         payload["embeds"] = embeds
+    if allowed_mentions is not None:
+        payload["allowed_mentions"] = allowed_mentions
 
     try:
         r = requests.post(url, json=payload, timeout=10)
         return r.status_code in (200, 204)
     except Exception:
         return False
+
+
+def _parse_id_csv(csv: str) -> list[str]:
+    """Parse a comma/space separated list of Discord IDs into a clean list of strings."""
+    if not csv:
+        return []
+    parts = []
+    for raw in csv.replace("\n", ",").replace(" ", ",").split(","):
+        v = raw.strip()
+        if not v:
+            continue
+        # Keep only digits to avoid accidental mention strings or other junk.
+        v = "".join(ch for ch in v if ch.isdigit())
+        if v:
+            parts.append(v)
+    # De-duplicate while preserving order
+    seen = set()
+    out: list[str] = []
+    for p in parts:
+        if p not in seen:
+            out.append(p)
+            seen.add(p)
+    return out
+
+
+def build_discord_mentions(*, roles_csv: str = "", users_csv: str = "") -> tuple[str, dict]:
+    """Return (mention_text, allowed_mentions) for safe role/user pings.
+
+    Discord webhooks will only actually ping if the IDs are explicitly allowed.
+    We set allowed_mentions to restrict parsing to only the configured IDs.
+    """
+    role_ids = _parse_id_csv(roles_csv)
+    user_ids = _parse_id_csv(users_csv)
+
+    mention_bits: list[str] = []
+    mention_bits.extend([f"<@&{rid}>" for rid in role_ids])
+    mention_bits.extend([f"<@{uid}>" for uid in user_ids])
+
+    allowed_mentions = {
+        "parse": [],  # do not auto-parse @everyone, @here, or arbitrary mentions
+        "roles": role_ids,
+        "users": user_ids,
+    }
+
+    return (" ".join(mention_bits).strip(), allowed_mentions)

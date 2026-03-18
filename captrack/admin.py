@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 from django.utils.safestring import mark_safe
 
 from .models import CapTrackSettings, CapWatchlist
-from eve_sde.models import Region
+from eveuniverse.models import EveRegion
 
 
 # ------------------------------------------------------------
@@ -14,7 +14,13 @@ from eve_sde.models import Region
 @admin.register(CapTrackSettings)
 class CapTrackSettingsAdmin(admin.ModelAdmin):
     autocomplete_fields = ("blacklisted_regions",)
-    fields = ("blacklisted_regions", "webhook_url", "test_webhook_button")
+    fields = (
+        "blacklisted_regions",
+        "webhook_url",
+        "discord_mention_roles",
+        "discord_mention_users",
+        "test_webhook_button",
+    )
     readonly_fields = ("test_webhook_button",)
 
     def has_add_permission(self, request):
@@ -24,7 +30,7 @@ class CapTrackSettingsAdmin(admin.ModelAdmin):
     def formfield_for_manytomany(self, db_field, request, **kwargs):
         if db_field.name == "blacklisted_regions":
             kwargs["queryset"] = (
-                Region.objects.all()
+                EveRegion.objects.all()
                 .exclude(name__regex=r"^[A-Z]-R\d{5}$")   # wormhole pseudo-regions
                 .exclude(name__regex=r"^[A-Z]{1,2}-\d{2}$")  # wormhole constellations
             )

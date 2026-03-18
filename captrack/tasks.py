@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from .models import CapTrackSettings, CapWatchlist
 from .services import get_capitals_in_blacklisted_regions, group_capitals_by_main
-from .utils.discord import build_captrack_main_embed, send_discord_webhook
+from .utils.discord import build_captrack_main_embed, send_discord_webhook, build_discord_mentions
 
 
 # -----------------------------
@@ -193,7 +193,20 @@ def scan_capitals_and_send_alerts():
             status_line=status_line,
         )
 
-        sent = send_discord_webhook(settings_obj.webhook_url, embeds=[embed])
+        mention_text, allowed_mentions = build_discord_mentions(
+            roles_csv=getattr(settings_obj, "discord_mention_roles", ""),
+            users_csv=getattr(settings_obj, "discord_mention_users", ""),
+        )
+
+        # If configured, we prefix the alert with the desired mentions.
+        content = mention_text if mention_text else None
+
+        sent = send_discord_webhook(
+            settings_obj.webhook_url,
+            content=content,
+            embeds=[embed],
+            allowed_mentions=allowed_mentions,
+        )
         if sent:
             CapWatchlist.objects.filter(pk__in=list(eligible_watchlists.keys())).update(last_alert_sent=now)
 
@@ -214,8 +227,7 @@ def refresh_watchlist_assets():
     Periodic task:
     - Refresh assets only for characters currently on watchlist
     """
-    # Corptools 3.0.0b7+: use single-character asset refresh task
-    from celery import current_app
+    from corptools.tasks import update_subset_of_characters
 
     char_ids: list[int] = []
     for wl in CapWatchlist.objects.select_related("character"):
@@ -223,15 +235,5 @@ def refresh_watchlist_assets():
         if cid:
             char_ids.append(cid)
 
-    if not char_ids:
-        return
-
-    task_name = "corptools.tasks.update_char_assets"
-    for cid in char_ids:
-        if task_name in current_app.tasks:
-            current_app.tasks[task_name].apply_async(kwargs={"character_id": cid})
-        else:
-            # Fallback: try old helper if present
-            current_app.send_task(task_name, kwargs={"character_id": cid})
-
-
+    if char_ids:
+        update_subset_of_characters.apply_async(kwargs={"character_ids": char_ids})
