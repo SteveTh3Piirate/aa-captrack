@@ -19,6 +19,7 @@ testproj/
 DEV_NOTES.md
 db.sqlite3
 .gitattributes
+*.zip
 
 # Mono auto generated files
 mono_crash.*

@@ -4,6 +4,7 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from django.utils import timezone
+from django.core.exceptions import FieldError
 
 from corptools.models.assets import CharacterAsset
 from allianceauth.authentication.models import CharacterOwnership
@@ -73,7 +74,8 @@ def _should_alert(alert_level: str) -> bool:
 # Public service functions
 # ------------------------------------------------------------------
 def get_capitals_in_blacklisted_regions(blacklisted_regions):
-    region_ids = [r.id for r in blacklisted_regions]
+    region_ids = [getattr(r, "id", None) or getattr(r, "region_id", None) for r in blacklisted_regions]
+    region_ids = [rid for rid in region_ids if rid]
 
     assets = (
         CharacterAsset.objects
@@ -87,16 +89,26 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
             "location_name__system__constellation",
             "location_name__system__constellation__region",
         )
-        .filter(type_name__group__group_id__in=CAPITAL_GROUP_IDS)
     )
 
+    # Filter capitals by ship group (schema differs between Corptools/SDE versions)
+    try:
+        assets = assets.filter(type_name__group_id__in=CAPITAL_GROUP_IDS)
+    except FieldError:
+        try:
+            assets = assets.filter(type_name__group__id__in=CAPITAL_GROUP_IDS)
+        except FieldError:
+            assets = assets.filter(type_name__group__group_id__in=CAPITAL_GROUP_IDS)
+
     filtered_assets: List[CharacterAsset] = []
+: List[CharacterAsset] = []
     for asset in assets:
         if not asset.location_name or not asset.location_name.system:
             continue
 
         region = asset.location_name.system.constellation.region
-        if region and region.region_id in region_ids:
+        region_pk = getattr(region, "id", None) or getattr(region, "region_id", None)
+        if region and getattr(region, 'id', None) in region_ids:
             filtered_assets.append(asset)
 
     output: List[Dict[str, Any]] = []
@@ -111,7 +123,11 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         except CharacterOwnership.DoesNotExist:
             continue
 
-        ship_group_id = getattr(asset.type_name.group, "group_id", None)
+        ship_group_id = (
+            getattr(asset.type_name, "group_id", None)
+            or getattr(getattr(asset.type_name, "group", None), "id", None)
+            or getattr(getattr(asset.type_name, "group", None), "group_id", None)
+        )
         ship_type_id = (
             getattr(asset.type_name, "eve_type_id", None)
             or getattr(asset.type_name, "type_id", None)
@@ -124,9 +140,9 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         region_obj = system_obj.constellation.region if system_obj else None
 
         system_name = getattr(system_obj, "name", "(Unknown)")
-        system_id = getattr(system_obj, "system_id", None)
+        system_id = getattr(system_obj, "id", None) or getattr(system_obj, "system_id", None)
         region_name = getattr(region_obj, "name", "(Unknown)")
-        region_id = getattr(region_obj, "region_id", None)
+        region_id = getattr(region_obj, "id", None) or getattr(region_obj, "region_id", None)
 
         structure_name = asset.location_name.location_name or "(Unknown)"
         location_str = f"{region_name} → {system_name}"
