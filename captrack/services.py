@@ -11,7 +11,11 @@ def _resolve_system_id(asset: CharacterAsset) -> Optional[int]:
     """Best-effort extract of solar system id from a CharacterAsset across Corptools schema variants."""
     # 1) direct system relation
     loc = getattr(asset, "location_name", None)
-    system_obj = getattr(loc, "system", None) if loc else None
+    # Accessing loc.system can raise MapSystem.DoesNotExist on some installs; be defensive
+    try:
+        system_obj = getattr(loc, "system", None) if loc else None
+    except Exception:
+        system_obj = None
     sid = (
         getattr(system_obj, "system_id", None)
         or getattr(system_obj, "id", None)
