@@ -7,6 +7,40 @@ def _safe_int(value: Any) -> Optional[int]:
         return None
 
 
+
+def _resolve_ship_type_id(asset: CharacterAsset) -> Optional[int]:
+    """Best-effort extract of EVE type_id for an asset's ship type across Corptools schema variants."""
+    t = getattr(asset, 'type_name', None)
+    if t is None:
+        return None
+    # Common direct fields
+    candidates = [
+        getattr(t, 'eve_type_id', None),
+        getattr(t, 'type_id', None),
+        getattr(t, 'id', None),
+        getattr(t, 'pk', None),
+        # Corptools 3.x Type model may link to an EVE/SDE item type via eveitemtype FK
+        getattr(t, 'eveitemtype_id', None),
+    ]
+    # Follow eveitemtype relation when present
+    eve_it = None
+    try:
+        eve_it = getattr(t, 'eveitemtype', None)
+    except Exception:
+        eve_it = None
+    if eve_it is not None:
+        candidates.extend([
+            getattr(eve_it, 'type_id', None),
+            getattr(eve_it, 'eve_type_id', None),
+            getattr(eve_it, 'id', None),
+            getattr(eve_it, 'pk', None),
+        ])
+    for c in candidates:
+        cid = _safe_int(c)
+        if cid:
+            return cid
+    return None
+
 def _resolve_system_id(asset: CharacterAsset) -> Optional[int]:
     """Best-effort extract of solar system id from a CharacterAsset across Corptools schema variants."""
     # 1) direct system relation
@@ -374,11 +408,7 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
             "character",
             "character__character",
             "type_name",
-            "type_name__group",
             "location_name",
-            "location_name__system",
-            "location_name__system__constellation",
-            "location_name__system__constellation__region",
         )
     )
 
@@ -390,16 +420,8 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         if region_pk is None:
             continue
         # Resolve ship type + canonical group via eve_sde when available
-        ship_type_id = (
-            getattr(asset.type_name, "eve_type_id", None)
-            or getattr(asset.type_name, "type_id", None)
-            or getattr(asset.type_name, "id", None)
-            or getattr(asset.type_name, "pk", None)
-        )
-        try:
-            ship_type_id_int = int(ship_type_id) if ship_type_id is not None else None
-        except Exception:
-            ship_type_id_int = None
+        ship_type_id_int = _resolve_ship_type_id(asset)
+        
 
         group_obj = getattr(asset.type_name, "group", None)
 
@@ -438,12 +460,7 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
     # Build a canonical type->group map from eve_sde for all filtered assets (best-effort)
     _type_ids: List[int] = []
     for _a in filtered_assets:
-        _tid = (
-            getattr(_a.type_name, "eve_type_id", None)
-            or getattr(_a.type_name, "type_id", None)
-            or getattr(_a.type_name, "id", None)
-            or getattr(_a.type_name, "pk", None)
-        )
+        _tid = _resolve_ship_type_id(_a)
         try:
             if _tid is not None:
                 _type_ids.append(int(_tid))
@@ -461,16 +478,8 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         except CharacterOwnership.DoesNotExist:
             continue
 
-        ship_type_id = (
-            getattr(asset.type_name, "eve_type_id", None)
-            or getattr(asset.type_name, "type_id", None)
-            or getattr(asset.type_name, "id", None)
-            or getattr(asset.type_name, "pk", None)
-        )
-        try:
-            ship_type_id_int = int(ship_type_id) if ship_type_id is not None else None
-        except Exception:
-            ship_type_id_int = None
+        ship_type_id_int = _resolve_ship_type_id(asset)
+        
 
         group_obj = getattr(asset.type_name, "group", None)
 
@@ -497,7 +506,10 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         alert_level = _risk_level_for_group(ship_group_id, group_name)
         cap_class = _cap_class_for_group(ship_group_id, group_name)
 
-        system_obj = getattr(getattr(asset, "location_name", None), "system", None)
+        try:
+            system_obj = getattr(getattr(asset, "location_name", None), "system", None)
+        except Exception:
+            system_obj = None
         system_id = _eve_pk(system_obj, "system_id", "id", "pk") or _resolve_system_id(asset)
 
         region_id, region_name, system_name_fallback = _resolve_region_info(asset)
@@ -514,7 +526,7 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
                 ownership.character, "character_name", str(char_id)
             ),
             "ship_type": asset.type_name.name,
-            "ship_type_id": ship_type_id,
+            "ship_type_id": ship_type_id_int,
             "ship_group_id": ship_group_id,
             "cap_class": cap_class,
             "risk": alert_level,

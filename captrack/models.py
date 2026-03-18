@@ -82,6 +82,20 @@ class CapTrackSettings(models.Model):
             )
 
 
+
+    @classmethod
+    def get_solo(cls):
+        """Return the singleton settings row (django-solo compatible helper).
+
+        Some deployments may not use django-solo's SingletonModel base. This helper ensures
+        a single settings row is always available without requiring schema changes.
+        """
+        obj = cls.objects.first()
+        if obj is not None:
+            return obj
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
 class CapAlertCooldown(models.Model):
     """
     Tracks cooldowns for capital alerts so the same character
