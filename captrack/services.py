@@ -1,5 +1,112 @@
 ﻿from __future__ import annotations
 
+def _safe_int(value: Any) -> Optional[int]:
+    try:
+        return int(value) if value is not None else None
+    except Exception:
+        return None
+
+
+def _resolve_system_id(asset: CharacterAsset) -> Optional[int]:
+    """Best-effort extract of solar system id from a CharacterAsset across Corptools schema variants."""
+    # 1) direct system relation
+    loc = getattr(asset, "location_name", None)
+    system_obj = getattr(loc, "system", None) if loc else None
+    sid = (
+        getattr(system_obj, "system_id", None)
+        or getattr(system_obj, "id", None)
+        or getattr(system_obj, "pk", None)
+    )
+    sid = _safe_int(sid)
+    if sid:
+        return sid
+
+    # 2) raw fields on location or asset
+    for obj, names in (
+        (loc, ("system_id", "solar_system_id")),
+        (asset, ("system_id", "solar_system_id")),
+    ):
+        if obj is None:
+            continue
+        for n in names:
+            sid = _safe_int(getattr(obj, n, None))
+            if sid:
+                return sid
+
+    return None
+
+
+def _sde_system_region_map(system_ids: Sequence[int]) -> Dict[int, Tuple[Optional[int], Optional[str], Optional[str]]]:
+    """Return mapping: system_id -> (region_id, region_name, system_name) using eve_sde."""
+    if not system_ids or SDESolarSystem is None:
+        return {}
+
+    cache = getattr(_sde_system_region_map, "_cache", None)
+    if cache is None:
+        cache = {}
+        setattr(_sde_system_region_map, "_cache", cache)
+
+    missing = [sid for sid in system_ids if sid not in cache]
+    if missing:
+        try:
+            qs = SDESolarSystem.objects.filter(pk__in=missing).select_related("constellation", "constellation__region")
+        except Exception:
+            qs = SDESolarSystem.objects.filter(pk__in=missing)
+        for ss in qs:
+            region_obj = None
+            try:
+                const = getattr(ss, "constellation", None)
+                region_obj = getattr(const, "region", None) if const else None
+            except Exception:
+                region_obj = None
+
+            rid = _safe_int(getattr(region_obj, "id", None) or getattr(region_obj, "region_id", None) or getattr(ss, "region_id", None))
+            rname = getattr(region_obj, "name", None) if region_obj is not None else None
+            sname = getattr(ss, "name", None)
+            cache[_safe_int(getattr(ss, "id", None) or getattr(ss, "system_id", None) or getattr(ss, "pk", None)) or ss.pk] = (rid, rname, sname)
+
+    return {sid: cache.get(sid, (None, None, None)) for sid in system_ids}
+
+
+def _resolve_region_info(asset: CharacterAsset) -> Tuple[Optional[int], Optional[str], Optional[str]]:
+    """Return (region_id, region_name, system_name) for an asset."""
+    loc = getattr(asset, "location_name", None)
+    system_obj = getattr(loc, "system", None) if loc else None
+
+    # Prefer joined objects when present
+    try:
+        const_obj = getattr(system_obj, "constellation", None) if system_obj else None
+        region_obj = getattr(const_obj, "region", None) if const_obj else None
+        if region_obj is None and system_obj is not None:
+            region_obj = getattr(system_obj, "region", None)
+    except Exception:
+        region_obj = None
+
+    rid = _safe_int(
+        (getattr(region_obj, "id", None) if region_obj else None)
+        or (getattr(region_obj, "region_id", None) if region_obj else None)
+        or (getattr(const_obj, "region_id", None) if const_obj else None)
+        or (getattr(system_obj, "region_id", None) if system_obj else None)
+    )
+    rname = None
+    if region_obj is not None:
+        rname = getattr(region_obj, "name", None) or getattr(region_obj, "region_name", None)
+
+    sname = getattr(system_obj, "name", None) if system_obj is not None else None
+
+    # Fallback to eve_sde system->region if needed
+    if rid is None:
+        sid = _resolve_system_id(asset)
+        if sid is not None:
+            m = _sde_system_region_map([sid]).get(sid)
+            if m:
+                rid = m[0] or rid
+                rname = m[1] or rname
+                sname = m[2] or sname
+
+    return rid, rname, sname
+
+
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -15,6 +122,12 @@ try:
     from eve_sde.models import ItemType as SDEItemType  # type: ignore
 except Exception:  # pragma: no cover
     SDEItemType = None  # type: ignore
+
+# Optional: use eve_sde canonical system->region mapping when Corptools location relations are missing.
+try:
+    from eve_sde.models import SolarSystem as SDESolarSystem  # type: ignore
+except Exception:  # pragma: no cover
+    SDESolarSystem = None  # type: ignore
 
 
 def _build_sde_type_group_map(type_ids: Sequence[int]) -> Dict[int, Tuple[Optional[int], Optional[str]]]:
@@ -264,11 +377,10 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
     filtered_assets: List[CharacterAsset] = []
 
     for asset in assets:
-        # Must have a system location to map to region
-        system_obj = getattr(getattr(asset, "location_name", None), "system", None)
-        if not system_obj:
+        # Resolve region/system information (works across schema variants)
+        region_pk, _region_name, _system_name = _resolve_region_info(asset)
+        if region_pk is None:
             continue
-
         # Resolve ship type + canonical group via eve_sde when available
         ship_type_id = (
             getattr(asset.type_name, "eve_type_id", None)
@@ -308,27 +420,9 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         if not _is_capital_group(ship_group_id, group_name):
             continue
 
-        # Resolve region id (constellation->region, or system.region)
-        region_obj = None
-        const_obj = getattr(system_obj, "constellation", None)
-        if const_obj is not None:
-            region_obj = getattr(const_obj, "region", None)
-        if region_obj is None:
-            region_obj = getattr(system_obj, "region", None)
-
-        region_pk = (
-            _eve_pk(region_obj, "id", "region_id", "pk")
-            or _eve_pk(const_obj, "region_id")
-            or _eve_pk(system_obj, "region_id")
-        )
-        try:
-            region_pk = int(region_pk) if region_pk is not None else None
-        except Exception:
-            region_pk = None
-
-        if region_pk is None or region_pk not in region_ids:
+                # Filter to blacklisted regions
+        if region_pk not in region_ids:
             continue
-
         filtered_assets.append(asset)
 
     output: List[Dict[str, Any]] = []
@@ -396,15 +490,11 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         cap_class = _cap_class_for_group(ship_group_id, group_name)
 
         system_obj = getattr(getattr(asset, "location_name", None), "system", None)
-        const_obj = getattr(system_obj, "constellation", None) if system_obj else None
-        region_obj = getattr(const_obj, "region", None) if const_obj else None
-        if region_obj is None and system_obj is not None:
-            region_obj = getattr(system_obj, "region", None)
+        system_id = _eve_pk(system_obj, "system_id", "id", "pk") or _resolve_system_id(asset)
 
-        system_name = getattr(system_obj, "name", "(Unknown)")
-        system_id = _eve_pk(system_obj, "system_id", "id", "pk")
-        region_name = getattr(region_obj, "name", None) or getattr(region_obj, "region_name", None) or "(Unknown)"
-        region_id = _eve_pk(region_obj, "id", "region_id", "pk") or _eve_pk(const_obj, "region_id") or _eve_pk(system_obj, "region_id")
+        region_id, region_name, system_name_fallback = _resolve_region_info(asset)
+        system_name = getattr(system_obj, "name", None) or system_name_fallback or "(Unknown)"
+        region_name = region_name or "(Unknown)"
 
         structure_name = getattr(getattr(asset, "location_name", None), "location_name", None) or "(Unknown)"
         location_str = f"{region_name} → {system_name}"
