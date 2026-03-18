@@ -10,6 +10,50 @@ from allianceauth.authentication.models import CharacterOwnership
 
 from .models import CapWatchlist
 
+# Optional: use eve_sde canonical type->group mapping when Corptools' group IDs/names differ.
+try:
+    from eve_sde.models import ItemType as SDEItemType  # type: ignore
+except Exception:  # pragma: no cover
+    SDEItemType = None  # type: ignore
+
+
+def _build_sde_type_group_map(type_ids: Sequence[int]) -> Dict[int, Tuple[Optional[int], Optional[str]]]:
+    """Return mapping: type_id -> (canonical_group_id, canonical_group_name).
+
+    Uses eve_sde as source of truth. Falls back gracefully if eve_sde is unavailable.
+    """
+    if not type_ids or SDEItemType is None:
+        return {}
+
+    # Cache by set of ids is expensive; cache the full map per process once and reuse.
+    cache = getattr(_build_sde_type_group_map, "_cache", None)
+    if cache is None:
+        cache = {}
+        setattr(_build_sde_type_group_map, "_cache", cache)
+
+    missing = [tid for tid in type_ids if tid not in cache]
+    if missing:
+        try:
+            qs = SDEItemType.objects.filter(pk__in=missing).select_related("group")
+        except Exception:
+            qs = SDEItemType.objects.filter(pk__in=missing)
+        for it in qs:
+            grp = getattr(it, "group", None)
+            gid = (
+                getattr(it, "group_id", None)
+                or getattr(grp, "group_id", None)
+                or getattr(grp, "id", None)
+                or getattr(grp, "pk", None)
+            )
+            try:
+                gid_int = int(gid) if gid is not None else None
+            except Exception:
+                gid_int = None
+            gname = getattr(grp, "name", None)
+            cache[int(getattr(it, "pk"))] = (gid_int, gname)
+
+    return {tid: cache.get(tid, (None, None)) for tid in type_ids}
+
 # Capital ship group IDs (T1 + faction variants live in same groups)
 CAPITAL_GROUP_IDS: List[int] = [
     30,    # Titans
@@ -225,19 +269,41 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         if not system_obj:
             continue
 
-        # Resolve group id robustly (SDE schemas vary)
-        group_obj = getattr(asset.type_name, "group", None)
-        ship_group_id = (
-            getattr(asset.type_name, "group_id", None)
-            or getattr(group_obj, "group_id", None)
-            or getattr(group_obj, "pk", None)
+        # Resolve ship type + canonical group via eve_sde when available
+        ship_type_id = (
+            getattr(asset.type_name, "eve_type_id", None)
+            or getattr(asset.type_name, "type_id", None)
+            or getattr(asset.type_name, "id", None)
+            or getattr(asset.type_name, "pk", None)
         )
         try:
-            ship_group_id = int(ship_group_id) if ship_group_id is not None else None
+            ship_type_id_int = int(ship_type_id) if ship_type_id is not None else None
         except Exception:
-            ship_group_id = None
+            ship_type_id_int = None
 
-        group_name = getattr(group_obj, "name", None)
+        group_obj = getattr(asset.type_name, "group", None)
+
+        ship_group_id = None
+        group_name = None
+
+        if ship_type_id_int is not None:
+            sde_map = _build_sde_type_group_map([ship_type_id_int])
+            ship_group_id, group_name = sde_map.get(ship_type_id_int, (None, None))
+
+        # Fallback to Corptools group fields if SDE mapping not available
+        if ship_group_id is None:
+            ship_group_id = (
+                getattr(asset.type_name, "group_id", None)
+                or getattr(group_obj, "group_id", None)
+                or getattr(group_obj, "pk", None)
+            )
+            try:
+                ship_group_id = int(ship_group_id) if ship_group_id is not None else None
+            except Exception:
+                ship_group_id = None
+
+        if group_name is None:
+            group_name = getattr(group_obj, "name", None)
 
         if not _is_capital_group(ship_group_id, group_name):
             continue
@@ -267,6 +333,22 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
 
     output: List[Dict[str, Any]] = []
 
+    # Build a canonical type->group map from eve_sde for all filtered assets (best-effort)
+    _type_ids: List[int] = []
+    for _a in filtered_assets:
+        _tid = (
+            getattr(_a.type_name, "eve_type_id", None)
+            or getattr(_a.type_name, "type_id", None)
+            or getattr(_a.type_name, "id", None)
+            or getattr(_a.type_name, "pk", None)
+        )
+        try:
+            if _tid is not None:
+                _type_ids.append(int(_tid))
+        except Exception:
+            pass
+    _sde_type_group = _build_sde_type_group_map(list(set(_type_ids)))
+
     for asset in filtered_assets:
         char_id = asset.character.character.character_id
 
@@ -277,25 +359,38 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         except CharacterOwnership.DoesNotExist:
             continue
 
-        group_obj = getattr(asset.type_name, "group", None)
-        ship_group_id = (
-            getattr(asset.type_name, "group_id", None)
-            or getattr(group_obj, "group_id", None)
-            or getattr(group_obj, "pk", None)
-        )
-        try:
-            ship_group_id = int(ship_group_id) if ship_group_id is not None else None
-        except Exception:
-            ship_group_id = None
-
         ship_type_id = (
             getattr(asset.type_name, "eve_type_id", None)
             or getattr(asset.type_name, "type_id", None)
             or getattr(asset.type_name, "id", None)
             or getattr(asset.type_name, "pk", None)
         )
+        try:
+            ship_type_id_int = int(ship_type_id) if ship_type_id is not None else None
+        except Exception:
+            ship_type_id_int = None
 
-        group_name = getattr(group_obj, "name", None)
+        group_obj = getattr(asset.type_name, "group", None)
+
+        ship_group_id = None
+        group_name = None
+
+        if ship_type_id_int is not None:
+            ship_group_id, group_name = _sde_type_group.get(ship_type_id_int, (None, None))
+
+        if ship_group_id is None:
+            ship_group_id = (
+                getattr(asset.type_name, "group_id", None)
+                or getattr(group_obj, "group_id", None)
+                or getattr(group_obj, "pk", None)
+            )
+            try:
+                ship_group_id = int(ship_group_id) if ship_group_id is not None else None
+            except Exception:
+                ship_group_id = None
+
+        if group_name is None:
+            group_name = getattr(group_obj, "name", None)
 
         alert_level = _risk_level_for_group(ship_group_id, group_name)
         cap_class = _cap_class_for_group(ship_group_id, group_name)
