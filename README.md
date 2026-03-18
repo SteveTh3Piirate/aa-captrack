@@ -22,6 +22,8 @@ Status: **Pre-release (beta)**
 - **Discord improvements**
   - Optional **role and/or user mentions** for alerts (safe `allowed_mentions` usage)
 
+  **If running AllianceAuth V5.0.0a4 you will need to downgrade django-esi to django-esi==8.3.1 to avoid compatibility issues with Corptools 3.x (which requires django-esi 8.3.1). This is a temporary measure until Corptools supports django-esi 9.x.**
+
 
 ---
 
