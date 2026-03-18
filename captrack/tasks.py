@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from .models import CapTrackSettings, CapWatchlist
 from .services import get_capitals_in_blacklisted_regions, group_capitals_by_main
-from .utils.discord import build_captrack_main_embed, send_discord_webhook, build_discord_mentions
+from .utils.discord import build_captrack_main_embed, send_discord_webhook
 
 
 # -----------------------------
@@ -193,20 +193,7 @@ def scan_capitals_and_send_alerts():
             status_line=status_line,
         )
 
-        mention_text, allowed_mentions = build_discord_mentions(
-            roles_csv=getattr(settings_obj, "discord_mention_roles", ""),
-            users_csv=getattr(settings_obj, "discord_mention_users", ""),
-        )
-
-        # If configured, we prefix the alert with the desired mentions.
-        content = mention_text if mention_text else None
-
-        sent = send_discord_webhook(
-            settings_obj.webhook_url,
-            content=content,
-            embeds=[embed],
-            allowed_mentions=allowed_mentions,
-        )
+        sent = send_discord_webhook(settings_obj.webhook_url, embeds=[embed])
         if sent:
             CapWatchlist.objects.filter(pk__in=list(eligible_watchlists.keys())).update(last_alert_sent=now)
 
@@ -225,18 +212,10 @@ def scan_capitals_and_send_alerts():
 def refresh_watchlist_assets():
     """
     Periodic task:
-    - Refresh assets only for characters currently on watchlist.
-
-    Notes:
-    Corptools 3.x changed the character update task API. Some versions expose a task
-    that accepts a *list* of character IDs, while others expose a "subset" task that
-    expects an integer subset size (and will error if passed a list). Additionally,
-    celery-once validates kwargs against the task signature before enqueueing.
-
-    This task performs runtime discovery of the best available corptools task and
-    calls it using the correct argument names / calling convention.
+    - Refresh assets only for characters currently on watchlist
     """
-    import inspect
+    # Corptools 3.0.0b7+: use single-character asset refresh task
+    from celery import current_app
 
     char_ids: list[int] = []
     for wl in CapWatchlist.objects.select_related("character"):
@@ -247,136 +226,12 @@ def refresh_watchlist_assets():
     if not char_ids:
         return
 
-    # Prefer corptools tasks that accept a list of character IDs.
-    # Fallback to per-character updates if only single-character tasks exist.
-    task_candidates: list[object] = []
-
-    # Newer corptools commonly exposes character tasks under corptools.tasks.character
-    try:
-        from corptools.tasks import character as ct_character  # type: ignore
-        for name in (
-            "update_characters_by_ids",
-            "update_characters_for_ids",
-            "update_characters",
-            "update_character_assets_by_ids",
-            "update_character_assets",
-            "update_characters_assets",
-        ):
-            if hasattr(ct_character, name):
-                task_candidates.append(getattr(ct_character, name))
-    except Exception:
-        ct_character = None  # noqa: F841
-
-    # Older corptools exports tasks directly from corptools.tasks
-    try:
-        import corptools.tasks as ct_tasks  # type: ignore
-        for name in (
-            "update_characters_by_ids",
-            "update_characters_for_ids",
-            "update_characters",
-            "update_character_assets_by_ids",
-            "update_character_assets",
-            "update_characters_assets",
-        ):
-            if hasattr(ct_tasks, name):
-                task_candidates.append(getattr(ct_tasks, name))
-        # Keep subset task as last resort only (expects an int on some versions)
-        if hasattr(ct_tasks, "update_subset_of_characters"):
-            task_candidates.append(getattr(ct_tasks, "update_subset_of_characters"))
-    except Exception:
-        ct_tasks = None  # noqa: F841
+    task_name = "corptools.tasks.update_char_assets"
+    for cid in char_ids:
+        if task_name in current_app.tasks:
+            current_app.tasks[task_name].apply_async(kwargs={"character_id": cid})
+        else:
+            # Fallback: try old helper if present
+            current_app.send_task(task_name, kwargs={"character_id": cid})
 
 
-    from celery import current_app
-
-    def _apply_task(task_obj: object, *, args: list | None = None, kwargs: dict | None = None):
-        """Enqueue a Celery task whether we have a Task object, a function, or a name."""
-        args = args or []
-        kwargs = kwargs or {}
-
-        # 1) Celery Task instance
-        if hasattr(task_obj, "apply_async"):
-            return task_obj.apply_async(args=args, kwargs=kwargs)  # type: ignore[attr-defined]
-
-        # 2) Explicit task name (some callables expose .name)
-        task_name = getattr(task_obj, "name", None)
-
-        # 3) Derive fully-qualified name from a plain function
-        if not task_name and callable(task_obj):
-            task_name = f"{getattr(task_obj, '__module__', '')}.{getattr(task_obj, '__name__', '')}".strip(".")
-
-        # 4) Resolve from Celery registry if possible
-        if task_name and task_name in current_app.tasks:
-            return current_app.tasks[task_name].apply_async(args=args, kwargs=kwargs)
-
-        # 5) Last resort: send_task by name
-        if task_name:
-            return current_app.send_task(task_name, args=args, kwargs=kwargs)
-
-        raise RuntimeError(f"Unable to enqueue task: {task_obj!r}")
-    def _enqueue_task(task_obj: object) -> bool:
-        """Try enqueueing a corptools task. Returns True if we scheduled it."""
-        # Celery task objects (and celery-once) put the callable on .run
-        run_fn = getattr(task_obj, "run", task_obj)
-        try:
-            sig = inspect.signature(run_fn)
-            param_names = list(sig.parameters.keys())
-        except Exception:
-            param_names = []
-
-        # Special-case Corptools 3.0.0b7+ task name that updates ONE character's assets.
-        # If we have it as a task-name string, we must enqueue it per-character_id (not a list).
-        if isinstance(task_obj, str) and task_obj in ("corptools.tasks.update_char_assets", "corptools.tasks.update_char_wallet"):
-            key = "character_id"
-            for cid in char_ids:
-                _apply_task(task_obj, kwargs={key: cid})
-            return True
-
-        # 1) Tasks that accept a list of IDs
-        for key in ("character_ids", "char_ids", "character_id_list", "ids"):
-            if key in param_names:
-                _apply_task(task_obj, kwargs={key: char_ids})
-                return True
-
-        # 2) Some tasks accept a single positional list argument
-        # Avoid calling subset-style tasks with a list (they expect an int)
-        if "subset" not in param_names and "min_runs" not in param_names:
-            try:
-                _apply_task(task_obj, args=[char_ids])
-                return True
-            except Exception:
-                pass
-
-        # 3) Subset-style task: pass an int if that's all that's available
-        # This will not guarantee watchlist-only updates, but keeps data fresh.
-        if "subset" in param_names:
-            try:
-                _apply_task(task_obj, kwargs={"subset": len(char_ids)})
-                return True
-            except Exception:
-                pass
-
-        # 4) Single-character task: enqueue one per character id
-        for key in ("character_id", "char_id", "id"):
-            if key in param_names:
-                for cid in char_ids:
-                    _apply_task(task_obj, kwargs={key: cid})
-                return True
-
-        return False
-
-    # De-duplicate candidates while keeping order
-    seen = set()
-    unique_candidates = []
-    for t in task_candidates:
-        if id(t) not in seen:
-            seen.add(id(t))
-            unique_candidates.append(t)
-
-    for candidate in unique_candidates:
-        if _enqueue_task(candidate):
-            return
-
-    # If we get here, we couldn't find a compatible corptools task.
-    # Intentionally no exception: better to keep the worker healthy.
-    return

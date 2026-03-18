@@ -4,7 +4,6 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from django.utils import timezone
-from django.core.exceptions import FieldError
 
 from corptools.models.assets import CharacterAsset
 from allianceauth.authentication.models import CharacterOwnership
@@ -76,22 +75,6 @@ def _should_alert(alert_level: str) -> bool:
 def get_capitals_in_blacklisted_regions(blacklisted_regions):
     region_ids = [r.id for r in blacklisted_regions]
 
-    def _eve_pk(obj, *names, default=None):
-        """Return the first non-None attribute from obj.
-
-        Corptools 3.x / eve_sde migration renamed a number of ID fields.
-        For example, eve_sde Region uses `id` (PK) where older models used
-        `region_id`. This helper keeps CapTrack compatible across schemas.
-        """
-        for n in names:
-            try:
-                v = getattr(obj, n)
-            except Exception:
-                v = None
-            if v is not None:
-                return v
-        return default
-
     assets = (
         CharacterAsset.objects
         .select_related(
@@ -104,18 +87,8 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
             "location_name__system__constellation",
             "location_name__system__constellation__region",
         )
+        .filter(type_name__group__group_id__in=CAPITAL_GROUP_IDS)
     )
-
-    # Corptools 3.x / eve_sde migration changed parts of the type/group model.
-    # Historically we filtered on type_name__group__group_id; newer schemas
-    # often use the PK (id) for the EVE group ID. Try the common variants.
-    try:
-        assets = assets.filter(type_name__group__group_id__in=CAPITAL_GROUP_IDS)
-    except FieldError:
-        try:
-            assets = assets.filter(type_name__group_id__in=CAPITAL_GROUP_IDS)
-        except FieldError:
-            assets = assets.filter(type_name__group__id__in=CAPITAL_GROUP_IDS)
 
     filtered_assets: List[CharacterAsset] = []
     for asset in assets:
@@ -123,8 +96,7 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
             continue
 
         region = asset.location_name.system.constellation.region
-        region_id = _eve_pk(region, "region_id", "id", "pk")
-        if region_id is not None and region_id in region_ids:
+        if region and getattr(region, 'id', None) in region_ids:
             filtered_assets.append(asset)
 
     output: List[Dict[str, Any]] = []
@@ -139,13 +111,7 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         except CharacterOwnership.DoesNotExist:
             continue
 
-        group_obj = getattr(asset.type_name, "group", None)
-        ship_group_id = (
-            getattr(group_obj, "group_id", None)
-            or getattr(group_obj, "eve_group_id", None)
-            or getattr(group_obj, "id", None)
-            or getattr(group_obj, "pk", None)
-        )
+        ship_group_id = getattr(asset.type_name.group, "group_id", None)
         ship_type_id = (
             getattr(asset.type_name, "eve_type_id", None)
             or getattr(asset.type_name, "type_id", None)
@@ -158,9 +124,9 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions):
         region_obj = system_obj.constellation.region if system_obj else None
 
         system_name = getattr(system_obj, "name", "(Unknown)")
-        system_id = _eve_pk(system_obj, "system_id", "id", "pk")
+        system_id = getattr(system_obj, "id", None) or getattr(system_obj, "system_id", None)
         region_name = getattr(region_obj, "name", "(Unknown)")
-        region_id = _eve_pk(region_obj, "region_id", "id", "pk")
+        region_id = getattr(region_obj, "id", None) or getattr(region_obj, "region_id", None)
 
         structure_name = asset.location_name.location_name or "(Unknown)"
         location_str = f"{region_name} → {system_name}"

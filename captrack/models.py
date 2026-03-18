@@ -25,27 +25,6 @@ class CapTrackSettings(models.Model):
         help_text="Discord webhook URL for cap notifications."
     )
 
-    # Optional Discord mentions (IDs) to ping when an alert is posted.
-    # Stored as comma-separated numeric IDs to keep admin UX simple.
-    discord_mention_roles = models.CharField(
-        max_length=512,
-        blank=True,
-        default="",
-        help_text=(
-            "Optional: comma-separated Discord Role IDs to ping on alerts. "
-            "Example: 123456789012345678,234567890123456789"
-        ),
-    )
-    discord_mention_users = models.CharField(
-        max_length=512,
-        blank=True,
-        default="",
-        help_text=(
-            "Optional: comma-separated Discord User IDs to ping on alerts. "
-            "Example: 123456789012345678"
-        ),
-    )
-
     class Meta:
         verbose_name = "CapTrack"
         verbose_name_plural = "CapTrack Dashboard"
@@ -63,17 +42,7 @@ class CapTrackSettings(models.Model):
         if not self.webhook_url:
             raise ValidationError("Webhook URL is not set.")
 
-        from .utils.discord import build_discord_mentions
-
-        mention_text, allowed_mentions = build_discord_mentions(
-            roles_csv=self.discord_mention_roles,
-            users_csv=self.discord_mention_users,
-        )
-
-        payload = {
-            "content": (mention_text + " " if mention_text else "") + "CapTrack test webhook successful.",
-            "allowed_mentions": allowed_mentions,
-        }
+        payload = {"content": "CapTrack test webhook successful."}
         response = requests.post(self.webhook_url, json=payload, timeout=5)
 
         if response.status_code >= 400:
