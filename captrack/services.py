@@ -22,6 +22,42 @@ CAPITAL_GROUP_IDS: List[int] = [
 ]
 
 
+
+
+# Fallback keywords to discover/identify capital ship groups when group IDs differ across schemas
+_CAPITAL_GROUP_NAME_KEYWORDS = [
+    "titan",
+    "supercarrier",
+    "carrier",
+    "dreadnought",
+    "lancer dreadnought",
+    "force auxiliary",
+    "capital industrial",
+    "rorqual",
+]
+
+def _discover_capital_group_ids() -> List[int]:
+    """Discover capital group IDs from the DB by group name."""
+    try:
+        TypeModel = CharacterAsset._meta.get_field("type_name").related_model
+        GroupModel = TypeModel._meta.get_field("group").related_model
+        from django.db.models import Q
+    except Exception:
+        return []
+
+    try:
+        pk_name = GroupModel._meta.pk.name
+    except Exception:
+        pk_name = "pk"
+
+    q = Q()
+    for kw in _CAPITAL_GROUP_NAME_KEYWORDS:
+        q |= Q(name__icontains=kw)
+
+    try:
+        return [int(x) for x in GroupModel.objects.filter(q).values_list(pk_name, flat=True).distinct()]
+    except Exception:
+        return []
 # ------------------------------------------------------------------
 # Classification helpers
 # ------------------------------------------------------------------
@@ -67,6 +103,80 @@ def _should_alert(alert_level: str) -> bool:
     Default alertability (overridden later by policy logic).
     """
     return alert_level in {"critical", "high", "medium"}
+
+
+def _normalize_group_name(group_name: Optional[str]) -> str:
+    return (group_name or "").strip().lower()
+
+
+def _is_capital_group(group_id: Optional[int], group_name: Optional[str]) -> bool:
+    """Return True if the group represents a capital class we track.
+
+    Works across schema variants by checking:
+    - canonical EVE group IDs
+    - discovered group PKs from DB (name-based discovery)
+    - group name keywords (fallback)
+    """
+    try:
+        gid = int(group_id) if group_id is not None else None
+    except Exception:
+        gid = None
+
+    if gid in CAPITAL_GROUP_IDS:
+        return True
+
+    # name-keyword fallback
+    name = _normalize_group_name(group_name)
+    if any(kw in name for kw in _CAPITAL_GROUP_NAME_KEYWORDS):
+        return True
+
+    # last resort: discovered IDs (if group PKs are not canonical)
+    discovered = getattr(_is_capital_group, "_discovered_ids", None)
+    if discovered is None:
+        discovered = set(_discover_capital_group_ids())
+        setattr(_is_capital_group, "_discovered_ids", discovered)
+
+    return gid in discovered if gid is not None else False
+
+
+def _cap_class_for_group(group_id: Optional[int], group_name: Optional[str]) -> str:
+    """Return normalized class string for policy logic."""
+    name = _normalize_group_name(group_name)
+
+    # Prefer explicit name match (works even if numeric IDs are non-canonical)
+    if "titan" in name or "supercarrier" in name:
+        return "supercapital"
+    if "lancer dreadnought" in name or ("dreadnought" in name):
+        return "dreadnought"
+    # order matters: check supercarrier before carrier substring
+    if "force auxiliary" in name:
+        return "fax"
+    if "carrier" in name:
+        return "carrier"
+    if "capital industrial" in name or "rorqual" in name:
+        return "industrial"
+
+    # Fallback to canonical ID mapping
+    return _cap_class_for_group_id(group_id)
+
+
+def _risk_level_for_group(group_id: Optional[int], group_name: Optional[str]) -> str:
+    """Severity classification (UI + alert styling) with name fallback."""
+    name = _normalize_group_name(group_name)
+
+    if "titan" in name or "supercarrier" in name:
+        return "critical"
+    if "lancer dreadnought" in name or ("dreadnought" in name):
+        return "high"
+    if "force auxiliary" in name:
+        return "medium"
+    # carrier, but avoid supercarrier (handled above)
+    if "carrier" in name:
+        return "medium"
+    if "capital industrial" in name or "rorqual" in name:
+        return "industrial"
+
+    return _risk_level_for_group_id(group_id)
 
 
 # ------------------------------------------------------------------
