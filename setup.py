@@ -22,8 +22,8 @@ setup(
     include_package_data=True,
     python_requires=">=3.10",
     install_requires=[
-        "allianceauth>=4.0",
-        "allianceauth-corptools>=2.15.2",
+        "allianceauth>4.0,<5.0.0a5",
+        "allianceauth-corptools>=2.15.2,<=3.0.0b8",
         "requests>=2.0",
     ],
     classifiers=[
