@@ -7,7 +7,7 @@ README = (BASE_DIR / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="aa-captrack",
-    version="1.0.9b10",
+    version="1.0.9b11",
     description="Capital ship movement early warning plugin for AllianceAuth",
     long_description=README,
     long_description_content_type="text/markdown",
@@ -22,8 +22,8 @@ setup(
     include_package_data=True,
     python_requires=">=3.10",
     install_requires=[
-        "allianceauth>=4.0",
-        "allianceauth-corptools>=2.15.2",
+        "allianceauth>4.0,<5.0.0a5",
+        "allianceauth-corptools>=2.15.2,<=3.0.0b8",
         "requests>=2.0",
     ],
     classifiers=[

@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 from django.utils.safestring import mark_safe
 
 from .models import CapTrackSettings, CapWatchlist
-from eveuniverse.models import EveRegion
+from eve_sde.models import Region
 
 
 # ------------------------------------------------------------
@@ -30,7 +30,7 @@ class CapTrackSettingsAdmin(admin.ModelAdmin):
     def formfield_for_manytomany(self, db_field, request, **kwargs):
         if db_field.name == "blacklisted_regions":
             kwargs["queryset"] = (
-                EveRegion.objects.all()
+                Region.objects.all()
                 .exclude(name__regex=r"^[A-Z]-R\d{5}$")   # wormhole pseudo-regions
                 .exclude(name__regex=r"^[A-Z]{1,2}-\d{2}$")  # wormhole constellations
             )
