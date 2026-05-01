@@ -9,16 +9,10 @@
 *.user
 *.userosscache
 *.sln.docstates
-*dist/
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
-.venv/
-*.egg-info/
-testproj/
-DEV_NOTES.md
-db.sqlite3
-.gitattributes
+*.zip
 
 # Mono auto generated files
 mono_crash.*

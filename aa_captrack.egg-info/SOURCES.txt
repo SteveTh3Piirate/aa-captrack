@@ -2,6 +2,7 @@ LICENSE
 MANIFEST.in
 README.md
 pyproject.toml
+setup.cfg
 setup.py
 aa_captrack.egg-info/PKG-INFO
 aa_captrack.egg-info/SOURCES.txt
@@ -25,10 +26,7 @@ captrack/migrations/0003_alter_captracksettings_options.py
 captrack/migrations/0004_update_basic_access_permission_name.py
 captrack/migrations/0005_capwatchlist_alert_snoozed_until_and_more.py
 captrack/migrations/0006_captracksettings_discord_mentions.py
-captrack/migrations/0006_swap_blacklisted_regions_to_sde.py
 captrack/migrations/0007_swap_blacklisted_regions_to_sde.py
-captrack/migrations/0008_alter_captracksettings_blacklisted_regions.py
-captrack/migrations/0009_merge_20260318_1314.py
 captrack/migrations/__init__.py
 captrack/templates/captrack/dashboard .bak
 captrack/templates/captrack/dashboard.html
