@@ -1,13 +1,9 @@
 from __future__ import annotations
-
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Sequence, Tuple
-
 from django.utils import timezone
-
 from corptools.models.assets import CharacterAsset
 from allianceauth.authentication.models import CharacterOwnership
-
 from .models import CapWatchlist
 
 # Capital ship group IDs (T1 + faction variants live in same groups)
@@ -40,8 +36,6 @@ def _eve_pk(obj: Any, *attrs: str) -> Optional[int]:
     return None
 
 
-
-
 def _safe_getattr(obj: Any, attr: str, default: Any = None) -> Any:
     """getattr that swallows broken/missing related-object lookups."""
     if obj is None:
@@ -51,21 +45,19 @@ def _safe_getattr(obj: Any, attr: str, default: Any = None) -> Any:
     except Exception:
         return default
 
+
 def _build_sde_capital_name_map() -> Tuple[Dict[str, int], Dict[str, int]]:
     """Return maps of capital hull name -> type_id and name -> group_id using eve_sde as source of truth.
-
     Keys are casefolded hull names. This avoids relying on Corptools internal ids which can vary across versions.
     """
     try:
         from eve_sde.models import ItemType  # type: ignore
     except Exception:
         return {}, {}
-
     try:
         qs = ItemType.objects.filter(group_id__in=CAPITAL_GROUP_IDS).values_list("id", "name", "group_id")
     except Exception:
         return {}, {}
-
     name_to_type: Dict[str, int] = {}
     name_to_group: Dict[str, int] = {}
     for type_id, name, group_id in qs:
@@ -126,7 +118,6 @@ def _resolve_ship_type_id(asset: "CharacterAsset") -> Optional[int]:
             getattr(eit, "type_id", None),
             getattr(eit, "id", None),
         ])
-
     for value in candidates:
         if value in (None, ""):
             continue
@@ -141,7 +132,6 @@ def _resolve_system_id(asset: "CharacterAsset") -> Optional[int]:
     """Best-effort resolve solar system id across Corptools schema variants."""
     location = _safe_getattr(asset, "location_name", None)
     system = _safe_getattr(location, "system", None) if location is not None else None
-
     candidates = [
         getattr(asset, "system_id", None),
         getattr(location, "system_id", None) if location is not None else None,
@@ -165,23 +155,18 @@ def _resolve_region_info(asset: "CharacterAsset") -> Tuple[Optional[int], Option
     system = _safe_getattr(location, "system", None) if location is not None else None
     constellation = getattr(system, "constellation", None) if system is not None else None
     region = getattr(constellation, "region", None) if constellation is not None else None
-
     region_id = _eve_pk(region, "region_id", "id", "pk")
     region_name = getattr(region, "name", None)
     system_name = getattr(system, "name", None)
-
     if region_id is not None:
         return region_id, region_name, system_name
-
     system_id = _resolve_system_id(asset)
     if system_id is None:
         return None, None, system_name
-
     try:
         from eve_sde.models import SolarSystem  # type: ignore
     except Exception:
         return None, None, system_name
-
     try:
         s = (
             SolarSystem.objects
@@ -191,15 +176,12 @@ def _resolve_region_info(asset: "CharacterAsset") -> Tuple[Optional[int], Option
         )
     except Exception:
         s = None
-
     if not s:
         return None, None, system_name
-
     try:
         region_obj = s.constellation.region
     except Exception:
         region_obj = None
-
     return (
         _eve_pk(region_obj, "region_id", "id", "pk"),
         getattr(region_obj, "name", None),
@@ -210,6 +192,7 @@ def _resolve_region_info(asset: "CharacterAsset") -> Tuple[Optional[int], Option
 # ------------------------------------------------------------------
 # Classification helpers
 # ------------------------------------------------------------------
+
 def _cap_class_for_group_id(group_id: Optional[int]) -> str:
     """Returns a normalized capital class string for policy logic."""
     if group_id in (30, 659):
@@ -246,12 +229,15 @@ def _should_alert(alert_level: str) -> bool:
 # ------------------------------------------------------------------
 # Public service functions
 # ------------------------------------------------------------------
+
 def get_capitals_in_blacklisted_regions(blacklisted_regions: Sequence[Any]) -> List[Dict[str, Any]]:
     """Return capital assets located in the given blacklisted regions.
 
     Robust across Corptools 3.x schema variants by:
+    - pre-filtering assets to capital type_ids only (avoids full-table scan)
     - resolving regions via eve_sde (fallbacks when Corptools map tables are incomplete)
     - classifying capitals using eve_sde ItemType group_id by hull name (not Corptools internal ids)
+    - batching CharacterOwnership lookups to avoid N+1 queries
     """
     region_ids: List[int] = []
     for r in blacklisted_regions:
@@ -262,24 +248,48 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions: Sequence[Any]) -> L
             region_ids.append(int(rid))
         except Exception:
             continue
-
     if not region_ids:
         return []
 
     cap_name_to_type_id, cap_name_to_group_id = _build_sde_capital_name_map()
 
-    assets = (
-        CharacterAsset.objects
-        .select_related(
-            "character",
-            "character__character",
-            "type_name",
-            "location_name",
-        )
-        .all()
+    # --- FIX 1: filter to capital type_ids at DB level ---
+    # This avoids loading the entire CharacterAsset table.
+    # cap_name_to_type_id values are SDE item IDs; Corptools stores these as type_id on CharacterAsset.
+    capital_type_ids = set(cap_name_to_type_id.values())
+
+    base_qs = CharacterAsset.objects.select_related(
+        "character",
+        "character__character",
+        "type_name",
+        # --- FIX 2: extend select_related to cover the full location chain ---
+        # Eliminates the per-asset lazy query waterfall through system/constellation/region.
+        "location_name",
+        "location_name__system",
+        "location_name__system__constellation",
+        "location_name__system__constellation__region",
     )
 
-    output: List[Dict[str, Any]] = []
+    if not capital_type_ids:
+        # SDE map is empty (SDE not populated yet) — nothing to match against
+        return []
+
+    try:
+        assets = base_qs.filter(type_id__in=capital_type_ids)
+        # str(qs.query) compiles the SQL without hitting the DB — raises FieldError
+        # if type_id doesn't exist on this Corptools version, triggering the fallback.
+        str(assets.query)
+    except Exception:
+        # type_id field name differs in this Corptools version; fall back to full scan.
+        # This is the slow path and should only happen on unusual Corptools schemas.
+        assets = base_qs.all()
+
+    # --- FIX 3: collect char_ids first, then batch CharacterOwnership lookup ---
+    # Instead of one .get() per capital hit, we do a single .filter(... __in=...) at the end.
+
+    # First pass: collect candidate entries with char_id but no ownership yet
+    candidates: List[Dict[str, Any]] = []
+    char_ids_seen: set[int] = set()
 
     for asset in assets:
         region_id, region_name, system_name_fallback = _resolve_region_info(asset)
@@ -296,14 +306,12 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions: Sequence[Any]) -> L
         if not hull_name:
             continue
         key = str(hull_name).casefold()
-
         ship_group_id = cap_name_to_group_id.get(key)
         if ship_group_id not in CAPITAL_GROUP_IDS:
             continue
 
         ship_type_id_int = cap_name_to_type_id.get(key) or _resolve_ship_type_id(asset)
 
-        # resolve character id
         char_id = None
         try:
             char_id = asset.character.character.character_id
@@ -315,10 +323,7 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions: Sequence[Any]) -> L
         if char_id is None:
             continue
 
-        try:
-            ownership = CharacterOwnership.objects.get(character__character_id=char_id)
-        except CharacterOwnership.DoesNotExist:
-            continue
+        char_ids_seen.add(char_id)
 
         alert_level = _risk_level_for_group_id(ship_group_id)
         cap_class = _cap_class_for_group_id(ship_group_id)
@@ -328,17 +333,13 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions: Sequence[Any]) -> L
         except Exception:
             system_obj = None
         system_id = _eve_pk(system_obj, "system_id", "id", "pk") or _resolve_system_id(asset)
-
         system_name = getattr(system_obj, "name", None) or system_name_fallback or "(Unknown)"
         region_name = region_name or "(Unknown)"
-
         structure_name = getattr(getattr(asset, "location_name", None), "location_name", None) or "(Unknown)"
-        location_str = f"{region_name} → {system_name}"
+        location_str = f"{region_name} / {system_name}"
 
-        output.append({
-            "ownership": ownership,
-            "character_id": char_id,
-            "character_name": getattr(ownership.character, "character_name", str(char_id)),
+        candidates.append({
+            "_char_id": char_id,
             "ship_type": str(hull_name),
             "ship_type_id": ship_type_id_int,
             "ship_group_id": ship_group_id,
@@ -354,6 +355,28 @@ def get_capitals_in_blacklisted_regions(blacklisted_regions: Sequence[Any]) -> L
             "location": location_str,
         })
 
+    if not candidates:
+        return []
+
+    # Single bulk ownership lookup for all discovered char_ids
+    ownership_map: Dict[int, CharacterOwnership] = {
+        o.character.character_id: o
+        for o in CharacterOwnership.objects.filter(
+            character__character_id__in=char_ids_seen
+        ).select_related("character", "user", "user__profile", "user__profile__main_character")
+    }
+
+    output: List[Dict[str, Any]] = []
+    for entry in candidates:
+        char_id = entry.pop("_char_id")
+        ownership = ownership_map.get(char_id)
+        if not ownership:
+            continue
+        entry["ownership"] = ownership
+        entry["character_id"] = char_id
+        entry["character_name"] = getattr(ownership.character, "character_name", str(char_id))
+        output.append(entry)
+
     return output
 
 
@@ -362,16 +385,13 @@ def touch_watchlist_last_seen(
 ) -> Tuple[int, int]:
     if now is None:
         now = timezone.now()
-
     ownerships: Dict[int, CharacterOwnership] = {}
     for e in entries:
         o = e.get("ownership")
         if o:
             ownerships[o.pk] = o
-
     created = 0
     updated = 0
-
     for ownership in ownerships.values():
         obj, was_created = CapWatchlist.objects.get_or_create(
             character=ownership,
@@ -380,28 +400,22 @@ def touch_watchlist_last_seen(
         if was_created:
             created += 1
             continue
-
         if obj.last_seen is None or obj.last_seen < now:
             obj.last_seen = now
             obj.save(update_fields=["last_seen"])
             updated += 1
-
     return created, updated
 
 
 def group_capitals_by_main(entries):
     grouped = defaultdict(lambda: {"main": None, "alts": []})
-
     for entry in entries:
         ownership = entry["ownership"]
         user = ownership.user
-
         main = getattr(user.profile, "main_character", None)
         if not main:
             main = ownership.character
-
         key = getattr(main, "character_id", main.pk)
         grouped[key]["main"] = main
         grouped[key]["alts"].append(entry)
-
     return list(grouped.values())
