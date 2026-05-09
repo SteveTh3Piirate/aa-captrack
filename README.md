@@ -2,28 +2,24 @@
 
 AllianceAuth plugin for tracking and alerting on capital ship activity (and other configured ship groups) across characters/accounts, with an operational dashboard, snoozing, and Discord notifications.
 
-Version: **v1.0.9b10**  
-Status: **Pre-release (beta)**
+Version: **v1.1.0**  
+Status: **Stable**  
+Compatibility: **AllianceAuth v5.0.0+ | AllianceAuth-corptools v3.0.0+**
 
 ---
 
-## What’s new in v1.0.9b10 (highlights)
+## What's new in v1.1.0 (highlights)
 
-- **Corptools 3.x / eve_sde compatibility (b8 target)**
-  - Updated lookups for **Type/Group** and **Region** ID fields under the SDE-backed schema.
-  - Watchlist asset refresh updated for Corptools 3.x task API changes (signature-safe enqueue + b7 single-character `update_char_assets` support).
-- **Move region blacklist to SDE**
-  - “Blacklisted Regions” now uses **`eve_sde.Region`** (instead of EveUniverse/legacy region models) so region search/autocomplete works on SDE-backed installs.
-- **Dashboard UX improvements**
-  - Card header includes **Main + Corporation + Alliance** names and **logos**.
-  - **Audit** button links to Corptools audit: `/audit/r/<character_id>/account/overview`
-  - **Snooze All** controls per card (1h / 6h / 24h / ∞ / clear)
-  - **Infinite snooze** option (until cleared)
-- **Discord improvements**
-  - Optional **role and/or user mentions** for alerts (safe `allowed_mentions` usage)
-
-  **If running AllianceAuth V5.0.0a4 you will need to downgrade django-esi to django-esi==8.3.1 to avoid compatibility issues with Corptools 3.x (which requires django-esi 8.3.1). This is a temporary measure until Corptools supports django-esi 9.x.**
-
+- **AllianceAuth v5.0.0 compatibility**
+  - Full support for AllianceAuth v5.0.0 and Django 5.2
+  - Updated hook patterns for AA v5 compatibility
+- **AllianceAuth-corptools v3.0.0 support**
+  - Compatible with Corptools v3.0.0 stable release
+  - Fully tested with eve_sde backed schema
+- **Production-ready**
+  - All beta features now stable
+  - Corptools 3.x integration fully validated
+  - SDE-backed region selection mature
 
 ---
 
@@ -132,9 +128,9 @@ Example:
 
 ### Requirements
 
-- AllianceAuth: **4.13+** (v4.x supported; v5 migration path is the motivation for this beta)
-- Django: 4.2+
-- Corptools: **3.0.0b7** (or compatible 3.x beta)
+- AllianceAuth: **5.0.0+** 
+- Django: **5.2+**
+- Corptools: **3.0.0+**
 - Database: MySQL/MariaDB recommended
 
 If you are running Corptools 3.x, you also need the SDE stack working:
@@ -146,7 +142,7 @@ If you are running Corptools 3.x, you also need the SDE stack working:
 ### Install the plugin
 
 ```bash
-pip install aa-captrack==1.0.9b4
+pip install aa-captrack
 ```
 
 ### Add to `INSTALLED_APPS`

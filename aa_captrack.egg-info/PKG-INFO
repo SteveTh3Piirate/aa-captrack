@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: aa-captrack
-Version: 1.0.9b5
+Version: 1.0.9b10
 Summary: Capital ship movement early warning plugin for AllianceAuth
 Home-page: https://github.com/SteveTh3Piirate/aa-captrack
 Author: SteveTh3Piirate
@@ -36,12 +36,12 @@ Dynamic: summary
 
 AllianceAuth plugin for tracking and alerting on capital ship activity (and other configured ship groups) across characters/accounts, with an operational dashboard, snoozing, and Discord notifications.
 
-Version: **v1.0.9b5**  
+Version: **v1.0.9b10**  
 Status: **Pre-release (beta)**
 
 ---
 
-## What’s new in v1.0.9b5 (highlights)
+## What’s new in v1.0.9b10 (highlights)
 
 - **Corptools 3.x / eve_sde compatibility (b8 target)**
   - Updated lookups for **Type/Group** and **Region** ID fields under the SDE-backed schema.
@@ -55,6 +55,8 @@ Status: **Pre-release (beta)**
   - **Infinite snooze** option (until cleared)
 - **Discord improvements**
   - Optional **role and/or user mentions** for alerts (safe `allowed_mentions` usage)
+
+  **If running AllianceAuth V5.0.0a4 you will need to downgrade django-esi to django-esi==8.3.1 to avoid compatibility issues with Corptools 3.x (which requires django-esi 8.3.1). This is a temporary measure until Corptools supports django-esi 9.x.**
 
 
 ---
